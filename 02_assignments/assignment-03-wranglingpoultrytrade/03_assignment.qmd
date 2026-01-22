@@ -1,0 +1,96 @@
+---
+title: "Assignment 3"
+format: html
+---
+
+# Dataset Description: U.S. Bilateral Trade in Poultry Products
+
+This dataset contains bilateral international trade data for the United States as the reporter country, focusing on the commodity classified under "**meat and edible offal**" of poultry, traded in fresh, chilled, or frozen form.
+
+The dataset includes poultry products, covering common cuts and parts such as breasts, thighs, wings, livers, hearts, and gizzards. It excludes live poultry and processed poultry products.
+
+Trade flows are reported with all countries as partners, meaning the data capture U.S. poultry trade with every trading partner (countries) worldwide. The dataset includes:
+
+-   Imports: Poultry products entering the United States from foreign suppliers (e.g., frozen chicken from Brazil or Canada).
+
+-   Exports: Poultry products shipped from the United States to international markets (e.g., U.S. poultry exports to Mexico or Asian countries).
+
+The data are aggregated at an annual frequency and cover the period 2018–2025.
+
+# Data Source:
+
+The dataset is obtained from the UN Comtrade database, an open-access repository of official international trade statistics compiled from customs data reported by over 150 countries. Key variables include trade values (USD) and quantities (kilograms), reflecting officially reported bilateral trade flows between the United States and its trading partners.
+
+# General directions
+
+1.  For each question, you are encouraged to create a chunk below it, and fully develop the code that creates your answer.
+
+2.  You are encouraged to use wrangling functions from the packages `dplyr` and `tidyr`, and plotting functions from the package `ggplot2`.
+
+3.  You are encouraged to the the pipe operator (`%>%` or `|>`) to pipe wrangling steps together.
+
+4.  For each question, after showing your code and output (be it numerical or graphical), you also need to provide a written sentence of your answer. Just showing code output is not sufficient for full points.
+
+5.  As part of the initial wrangling, you are expected to:\
+
+-   Transform the `qty` column from kg to Mg\
+-   Select only columns that are useful to answer the questions.
+
+
+## Dataset
+
+```{r}
+trade_df <- read_csv("../data/assignment_2.csv")
+
+summary(trade_df)
+```
+
+```{r}
+metadata_info <- read_csv("../data/metadata_assignment_2.csv")
+```
+
+# Assignemnt Questions:
+
+## Import:
+
+#### 1. How many distinct countries were there (based on given data), from where US was importing the poultry products from 2018-2024?
+
+#### 2. What are the minimum, maximum trade values for imports? Mention the country, year and its respective value.
+
+#### 3. Identify the top 5 countries from which the USA imported the most (qty) in the years 2018 and 2024. List the countries and their corresponding import values.
+
+#### 4. Calculate the total import value for the USA from each country. Which country had the highest total export value **to** US, and what was that value?
+
+#### 5. Calculate the total import value for the USA in each year from 2018 to 2025. Which year had the highest total import value, and what was that value?
+
+#### 6. Plot a line graph showing the total annual import value for the USA from 2018 to 2024. Describe any noticeable trends or patterns (e.g., increases, decreases, or fluctuations) in the graph. Create a publication ready plot.
+
+## Export:
+
+#### 7. How many distinct countries were there (based on given data), to where US was exporting the poultry products?
+
+#### 8. What are the minimum, maximum trade values for exports? Mention the country, year and its respective value.
+
+#### 9. Identify the top 5 countries to which the USA exported the most (qty) in the years 2018 and 2024. List the countries and their corresponding export values.
+
+#### 10. Calculate the total export value for the USA from each country. Which country had the highest total import value **from** US, and what was that value?
+
+#### 11. Calculate the total export value for the USA in each year from 2018 to 2025. Which year had the highest total export value, and what was that value?
+
+#### 12. Plot a line graph showing the total annual export value for the USA from 2018 to 2024. Describe any noticeable trends or patterns (e.g., increases, decreases, or fluctuations) in the graph. Create a publication ready plot.
+
+## Import - Export Comparision:
+
+#### 13. Does the U.S. behave more as a net importer or net exporter for this commodity? Explore it:
+
+-   Based on total value US imports and exports.
+-   Based on number of countries US imports and exports
+-   Based on each year's import export value.
+
+#### 14. Are the main import partners also major export destinations? Explore it based on the total import export value by countries.
+
+#### 15. Can you calculate if US is in trade surplus or trade deficit for each year from 2018-2024?
+
+$$\text{Trade surplus or deficit} = \text{Imports} - \text{Exports}$$
+
+
