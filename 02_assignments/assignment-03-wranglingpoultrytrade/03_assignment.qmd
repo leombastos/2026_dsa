@@ -1,57 +1,61 @@
 ---
 title: "Assignment 3"
-format: html
+format:
+  html:
+    code-fold: false
+    embed-resources: true
+    toc: true
 ---
 
-# Dataset Description: U.S. Bilateral Trade in Poultry Products
+# Dataset Description: U.S. Bilateral Trade in Poultry Products  
 
-This dataset contains bilateral international trade data for the United States as the reporter country, focusing on the commodity classified under "**meat and edible offal**" of poultry, traded in fresh, chilled, or frozen form.
+This dataset contains bilateral international trade data for the United States as the reporter country, focusing on the commodity classified under "**meat and edible offal**" of poultry, traded in fresh, chilled, or frozen form.  
 
-The dataset includes poultry products, covering common cuts and parts such as breasts, thighs, wings, livers, hearts, and gizzards. It excludes live poultry and processed poultry products.
+The dataset includes poultry products, covering common cuts and parts such as breasts, thighs, wings, livers, hearts, and gizzards. It excludes live poultry and processed poultry products.  
 
-Trade flows are reported with all countries as partners, meaning the data capture U.S. poultry trade with every trading partner (countries) worldwide. The dataset includes:
+Trade flows are reported with all countries as partners, meaning the data capture U.S. poultry trade with every trading partner (countries) worldwide. The dataset includes:  
 
--   Imports: Poultry products entering the United States from foreign suppliers (e.g., frozen chicken from Brazil or Canada).
+-   Imports: Poultry products entering the United States from foreign suppliers (e.g., frozen chicken from Brazil or Canada).  
 
--   Exports: Poultry products shipped from the United States to international markets (e.g., U.S. poultry exports to Mexico or Asian countries).
+-   Exports: Poultry products shipped from the United States to international markets (e.g., U.S. poultry exports to Mexico or Asian countries).  
 
-The data are aggregated at an annual frequency and cover the period 2018–2025.
+The data are aggregated at an annual frequency and cover the period 2018–2025.  
 
-# Data Source:
+# Data Source:  
 
-The dataset is obtained from the UN Comtrade database, an open-access repository of official international trade statistics compiled from customs data reported by over 150 countries. Key variables include trade values (USD) and quantities (kilograms), reflecting officially reported bilateral trade flows between the United States and its trading partners.
+The dataset is obtained from the UN Comtrade database, an open-access repository of official international trade statistics compiled from customs data reported by over 150 countries. Key variables include trade values (USD) and quantities (kilograms), reflecting officially reported bilateral trade flows between the United States and its trading partners.  
 
-# General directions
+# General directions  
 
-1.  For each question, you are encouraged to create a chunk below it, and fully develop the code that creates your answer.
+1.  For each question, you are encouraged to create a chunk below it, and fully develop the code that creates your answer.  
 
-2.  You are encouraged to use wrangling functions from the packages `dplyr` and `tidyr`, and plotting functions from the package `ggplot2`.
+2.  You are encouraged to use wrangling functions from the packages `dplyr` and `tidyr`, and plotting functions from the package `ggplot2`.  
 
-3.  You are encouraged to the the pipe operator (`%>%` or `|>`) to pipe wrangling steps together.
+3.  You are encouraged to the the pipe operator (`%>%` or `|>`) to pipe wrangling steps together.  
 
-4.  For each question, after showing your code and output (be it numerical or graphical), you also need to provide a written sentence of your answer. Just showing code output is not sufficient for full points.
+4.  For each question, after showing your code and output (be it numerical or graphical), you also need to provide a written sentence of your answer. Just showing code output is not sufficient for full points.  
 
-5.  As part of the initial wrangling, you are expected to:\
+5.  As part of the initial wrangling, you are expected to:  
 
--   Transform the `qty` column from kg to Mg\
--   Select only columns that are useful to answer the questions.
+-   Transform the `qty` column from kg to Mg  
+-   Select only columns that are useful to answer the questions.  
+
+6. Check out the following cheatsheets to give you some ideas on wrangling and plotting:  
+
+  - **ggplot2**: https://posit.co/wp-content/uploads/2022/10/data-visualization-1.pdf  
+  - **dplyr**: https://rstudio.github.io/cheatsheets/data-transformation.pdf   
+  
 
 
 ## Dataset
 
 ```{r}
-trade_df <- read_csv("../data/assignment_2.csv")
-
-summary(trade_df)
-```
-
-```{r}
-metadata_info <- read_csv("../data/metadata_assignment_2.csv")
+ 
 ```
 
 # Assignemnt Questions:
 
-## Import:
+## Imports:
 
 #### 1. How many distinct countries were there (based on given data), from where US was importing the poultry products from 2018-2024?
 
@@ -65,7 +69,7 @@ metadata_info <- read_csv("../data/metadata_assignment_2.csv")
 
 #### 6. Plot a line graph showing the total annual import value for the USA from 2018 to 2024. Describe any noticeable trends or patterns (e.g., increases, decreases, or fluctuations) in the graph. Create a publication ready plot.
 
-## Export:
+## Exports:
 
 #### 7. How many distinct countries were there (based on given data), to where US was exporting the poultry products?
 
@@ -79,7 +83,7 @@ metadata_info <- read_csv("../data/metadata_assignment_2.csv")
 
 #### 12. Plot a line graph showing the total annual export value for the USA from 2018 to 2024. Describe any noticeable trends or patterns (e.g., increases, decreases, or fluctuations) in the graph. Create a publication ready plot.
 
-## Import - Export Comparision:
+## Imports - Exports Comparision:
 
 #### 13. Does the U.S. behave more as a net importer or net exporter for this commodity? Explore it:
 
@@ -93,4 +97,31 @@ metadata_info <- read_csv("../data/metadata_assignment_2.csv")
 
 $$\text{Trade surplus or deficit} = \text{Imports} - \text{Exports}$$
 
+# Submitting your work  
+
+Once you have developed all the code and answers, make sure to Render this quarto file.  
+
+**Notes on rendering**:  
+
+- Make sure to render your work and inspect how the final html look like.  
+- If it does not look professional for whatever reason, then fix the issue, re-render it, recheck.  
+- Only send me your work once your html file looks professional.  
+- Some potential issues you may encounter and how to fix them:   
+  - Some times your code may be creating a table output that is waaay to long and cumbersome to scroll through when rendered. If this is the case, make it more professional looking by using the `head()` function to only print the first handful of rows (instead of thousands of rows).  
+  
+  - **DO NOT** delete the file's heading levels (# and ##). They set up the proper heading 1 and 2 levels, and I use them to guide my grading.  
+  
+  - There's a total of **15 questions**. If you mess around with the heading levels and you get a different number of questions on the rendered version, fix it.  
+  
+  - If a given chunk is also outputting warnings or messages, inhibit this behavior by changing the chunk options `message` and `warning` to `FALSE` (I'll demo this in a moment).  
+  
+  - If, after rendered, 2 lines of text are connected and you wish to "break line" between them, add 2 extra spaces after the first one (I'lld demo this in a moment).    
+  
+After rendering, an .html file will be created on your `code` folder.  
+
+Rename this file to `03_assignment_LASTNAME.html`.    
+
+For ex., `03_assignment_Bastos.html`.
+
+Submit the html file on eLC by Monday Feb 2nd 11:59 pm, **one week** from today.  
 
