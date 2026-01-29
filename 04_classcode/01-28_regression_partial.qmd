@@ -1,0 +1,691 @@
+---
+title: "Regression"
+format: html
+---
+
+# Learning objectives  
+Today's learning objectives are to:  
+-   Explore a data set containing corn grain yield response to seeding rate coming from a randomized complete-block design.
+
+- Complete formal analysis of four models:
+  - intercept-only  
+  - linear (intercept + slope)  
+  - quadratic  
+  - linear-plateau  
+
+- Use bootstrap to create confidence intervals around regression lines.  
+  
+-   Compare all models using AIC. Which one fits the data best? Choose one to proceed and use in the next steps.
+
+-   Use regression for finding level of input (seeds/ha) that optimize crop output (yield).
+
+# Introduction  
+# Regression use - Finding optimum input level
+
+One of the main goals of applying different levels of an input (e.g., seeding rate) and measuring its effect on an output (e.g., yield) is to estimate the **optimum input level that maximizes the output**.
+
+Here, our input is seeding rate, but it could be a range of other types of inputs:  
+  - Fertilizer  
+  - Pesticide  
+  - Irrigation volume  
+  - Temperature and air relative humidity (controlled environments)   
+  - Planting date  
+  - Others?
+
+Because both the response variable (i.e., corn yield) and explanatory variable (i.e., seeding rate) are **numerical**, we can analyze this in a **regression** approach (instead of ANOVA).  
+
+## Different input x output responses
+
+Anytime we have this input x output **numerical** relationship, a few different patterns can emerge.
+
+```{r input output relationships figure, echo=F}
+knitr::include_graphics("../data/ior.png")
+```
+
+Talk about each of these patterns.
+
+# 1) Setup  
+
+Here is where we load the packages we will use.
+
+```{r setup}
+#| message: false
+#| warning: false
+
+#install.packages("nlraa")
+
+# Loading packages
+library(tidyverse) # for data wrangling and plotting
+library(janitor) # clean column names
+library(lmerTest) # for mixed-effect modeling
+library(broom.mixed) # for residual diagnostics
+library(knitr) # for figure displaying
+library(nlme) # for non-linear modeling
+library(car)
+library(nlraa) # for starting value functions
+library(metrica) # for rmse
+
+```
+
+Reading data and doing some light wrangling.  
+```{r}
+#| message: false
+reg_dfw 
+
+reg_dfw
+```
+
+This study was a randomized complete block design (RCBD) with four blocks.  
+
+The treatment factor is seeding rate (in 1,000 seeds per ha) with five levels:  
+  - 40  
+  - 60  
+  - 80  
+  - 100  
+  - 120  
+
+The response variable was corn yield in Mg/ha.  
+
+
+# 2) EDA  
+```{r summary}
+summary(reg_dfw)
+```
+Yield ranging from 7.8 to 15.6 Mg/ha.  
+
+```{r reg exp boxplot}
+
+```
+
+What is going on with this boxplot?
+
+```{r reg plot point + smooth}
+ggplot(reg_dfw, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))
+
+```
+
+Let's fit 4 different models to assess which one fits the data the best. 
+
+Our goal is to then use that model to estimate the optimum seeding rate for this study.  
+
+# 3) Intercept-only 
+## a) Model  
+```{r mod1_int}
+# Changing to sum-to-zero contrast
+options(contrasts = c("contr.sum", "contr.poly"))
+
+# Model fitting
+mod1_int 
+
+# Summary
+summary(mod1_int)
+
+```
+
+## b) Model Assumptions
+```{r mod1 augmenting}
+# Augmenting and adding perason standardized residuals
+mod1_int_aug 
+
+
+mod1_int_aug
+```
+
+### Within-group errors are iid ~ N(0, var2)
+
+```{r mod1 Standardized Residuals vs. Fitted}
+
+```
+
+Residuals looking suspicious.
+
+For now, let's keep going.
+
+```{r mod1 Quantile-Quantile}
+
+
+```
+Some deviations at the tails, not too bad.  
+
+### Random effects are iid ~ N(0,var1)
+
+On this plot, looking for normality.
+
+```{r mod1 QQ plot for Location:fRep random effects}
+mod1_int_randeff 
+
+```
+Few observations, nothing alarming.  
+
+## c) Model summary
+
+```{r mod1 ANOVA}
+summary(mod1_int)
+```
+
+Intercept highly significant!
+
+## d) Final plot  
+
+```{r mod1 final plot}
+ggplot(mod1_int_aug, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, 
+             alpha = .7)
+```
+
+Problem with the plot above:  
+- no confidence interval around regression
+
+Solution:  
+- we can use bootstrap to create confidence intervals around the regression curve
+
+First, let's create an data set with all levels of seeding rate we want to get a prediction.  
+```{r nd}
+nd 
+
+nd
+```
+
+```{r mod1 better final plot}
+# Creating predictions
+nd 
+# Creating function to bootstrap
+predict.fun <- function(mod) {
+  predict(mod, 
+          newdata = nd, 
+          re.form = NA)
+}
+
+# Bootstrapping for confidence interval
+mod1_int_boots 
+mod1_int_boots
+
+nd 
+
+nd
+
+# Final plot
+
+```
+
+Linear thoughts:
+
+Just because p-value is significant, it DOES NOT mean the model is good. Always check residuals and plot!!
+
+Next, let's try a linear (intercept + slope) model.  
+
+# 4) Linear regression  
+
+## a) Model  
+```{r mod2 linear model}
+# Changing to sum-to-zero contrast
+options(contrasts = c("contr.sum", "contr.poly"))
+
+# Model fitting
+mod2_lin 
+
+# Summary
+summary(mod2_lin)
+
+```
+
+## b) Model Assumptions
+```{r mod2 augmenting}
+# Augmenting and adding perason standardized residuals
+mod2_lin_aug <- augment(mod2_lin) %>%
+  mutate(.stdresid = resid(mod2_lin, 
+                           type = "pearson", 
+                           scaled = T))
+
+
+mod2_lin_aug
+```
+
+### Within-group errors are iid ~ N(0, var2)
+
+```{r mod2 Standardized Residuals vs. Fitted}
+ggplot(mod2_lin_aug, 
+       aes(x = .fitted, 
+           y = .stdresid))+
+  geom_hline(yintercept = 0, color = "red")+
+  geom_point(size = 3, alpha = .7)+
+  geom_smooth()
+```
+
+Residuals looking suspicious! Clear quadratic pattern! We will need to address this problem later.
+
+For now, let's keep going.
+
+```{r mod2 Quantile-Quantile}
+ggplot(mod2_lin_aug, 
+       aes(sample = .stdresid))+
+  stat_qq()+
+  stat_qq_line()
+```
+Tails looking a bit off now.  
+
+### Random effects are iid ~ N(0,var1)
+
+On this plot, looking for normality.
+
+```{r mod2 QQ plot for Location:fRep random effects}
+mod2_lin_randeff <- ranef(mod2_lin)[[1]] 
+
+ggplot(mod2_lin_randeff, 
+       aes(sample = `(Intercept)`))+
+  stat_qq()+
+  stat_qq_line()
+
+```
+Few points, not too bad.  
+
+## c) Model summary
+
+```{r mod2 ANOVA}
+summary(mod2_lin)
+```
+
+Intercept and slope for sr_ksha are highly significant!
+
+## d) Final plot  
+
+```{r mod2 final plot}
+ggplot(mod2_lin_aug, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, 
+             alpha = .7)
+```
+
+Problem with the plot above:  
+- no confidence interval around regression
+
+Solution:  
+- we can use bootstrap to create confidence intervals around the regression curve
+
+```{r mod2 better final plot}
+# Creating predictions
+nd <- nd %>%
+  mutate(mod2_yield_mgha = predict(mod2_lin, 
+                                   nd, 
+                                   re.form = NA))
+
+# Bootstrapping for confidence interval
+mod2_lin_boots <- bootMer(mod2_lin, 
+                          predict.fun, 
+                          nsim = 200) %>%
+  confint() %>%
+  as.data.frame() %>%
+  rename(mod2_lin_lcl = `2.5 %`,
+         mod2_lin_upl = `97.5 %`)
+
+
+nd <- nd %>%
+  bind_cols(mod2_lin_boots)
+
+nd
+
+# Final plot
+ggplot(reg_dfw, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, 
+             alpha = .7)+
+  geom_line(data = nd, 
+            aes(y = mod2_yield_mgha), 
+            color = "forestgreen")+
+  geom_ribbon(data = nd, 
+              aes(x = sr_ksha, 
+                  ymin = mod2_lin_lcl,
+                  ymax = mod2_lin_upl),
+              fill = "gray", 
+              alpha = 0.5, 
+              inherit.aes = FALSE)
+```
+
+# 5) Quadratic regression  
+## a) Model
+
+```{r mod3 model}
+# Changing to sum-to-zero contrast
+options(contrasts = c("contr.sum", "contr.poly"))
+
+# Model fitting
+mod3_quad 
+
+# Summary
+summary(mod3_quad)
+```
+
+## b) Model Assumptions
+```{r mod3 augmenting}
+# Augmenting and adding pearson standardized residuals
+mod3_quad_aug <- augment(mod3_quad) %>%
+  mutate(.stdresid = resid(mod3_quad, 
+                           type = "pearson", 
+                           scaled = T))
+
+
+mod3_quad_aug
+```
+
+### Within-group errors are iid ~ N(0, var2)
+
+```{r mod3 Standardized Residuals vs. Fitted}
+ggplot(mod3_quad_aug, 
+       aes(x = .fitted, 
+           y = .stdresid))+
+  geom_hline(yintercept = 0, color = "red")+
+  geom_point(size = 3, alpha = .7)+
+  geom_smooth(method = "lm")
+```
+Residuals are looking better now, no pattern.  
+
+Linear thoughts:
+
+Model assumptions are based on residuals, not raw data!
+
+Notice here that we used the **same data** as before, just changed the model, and that completely changed the residuals (for better, in this case)!
+
+Remember: residual = distance of raw data from model fit. If model changes, residual changes, even when same underlying raw data is used.
+
+
+```{r mod3 Quantile-Quantile}
+ggplot(mod3_quad_aug, 
+       aes(sample = .stdresid))+
+  stat_qq()+
+  stat_qq_line()
+```
+Looking better than before, especially tails.  
+
+### Random effects are iid ~ N(0,var1)
+
+On this plot, looking for normality.
+
+```{r mod3 QQ plot for Rep random effect}
+mod3_quad_randeff <- ranef(mod3_quad)[[1]] 
+
+ggplot(mod3_quad_randeff, 
+       aes(sample = `(Intercept)`))+
+  stat_qq()+
+  stat_qq_line()
+
+```
+Looks ok.  
+
+## c) Model summary
+
+```{r mod3 ANOVA}
+summary(mod3_quad)
+
+```
+
+Slope and curvature for sr_ksha are highly significant!
+
+## d) Final plot
+
+```{r mod3 final plot}
+ggplot(mod3_quad_aug, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, alpha = .7)+
+  geom_line(aes(y = .fixed), 
+            color = "forestgreen")
+
+```
+
+Problems with the plot:   
+- regression curve on the plot above is not continuous because it is based on our original levels of SR (40, 60, 80, 100, 120 k seeds/ha).
+
+-   similar to linear regression, no confidence interval.
+
+Solutions:   
+- to create a smoother look, we can simulate some SR data, use the model above to predict their yield, and plot that as a line.
+
+-   we can use bootstrap to create confidence intervals around the regression curve
+
+```{r mod3 better final plot}
+# Creating predictions
+nd <- nd %>%
+  mutate(mod3_yield_mgha = predict(mod3_quad, 
+                                   nd, 
+                                   re.form = NA))
+
+# Bootstrapping
+mod3_quad_boots <- bootMer(mod3_quad, 
+                           predict.fun, 
+                           nsim = 200) %>%
+  confint() %>%
+  as.data.frame() %>%
+  rename(mod3_quad_lcl = `2.5 %`,
+         mod3_quad_upl = `97.5 %`)
+
+
+nd <- nd %>%
+  bind_cols(mod3_quad_boots)
+
+nd
+
+# Final plot
+ggplot(reg_dfw, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, alpha = .7)+
+  geom_line(data = nd, 
+            aes(y = mod3_yield_mgha), 
+            color = "forestgreen")+
+  geom_ribbon(data = nd, aes(x = sr_ksha, 
+                             ymin = mod3_quad_lcl,
+                             ymax = mod3_quad_upl),
+              fill = "gray", 
+              alpha = 0.5, 
+              inherit.aes = FALSE)
+
+
+
+```
+
+Now, which one fits the data best?
+Which one should we chose for finding the optimum, or predicting new data?  
+
+In our data set,   
+- We know there is a yield response to SR (so intercept-only model is not a good candidate),  
+- We know we have achieved a maximum point (so linear is not a good candidate)  
+- We have already fit the quadratic model.  
+- We can fit the linear-plateau (LP) model.
+
+So, let's fit a LP model and then compare it to the quadratic.  
+After that, we can choose the model that best fit our data and use it to extract the optimum seeding rate.
+
+# 6) Linear-plateau regression  
+## a) Model
+
+```{r mod4 model}
+# Changing to sum-to-zero contrast
+options(contrasts = c("contr.sum", "contr.poly"))
+
+# Model fitting
+mod4_linp 
+
+# Summary
+summary(mod4_linp)
+```
+
+## b) Model Assumptions
+```{r mod4 augmenting}
+# Augmenting and adding pearson standardized residuals
+mod4_linp_aug <- augment(mod4_linp,
+                         data = reg_dfw) %>%
+  mutate(.stdresid = resid(mod4_linp, 
+                           type = "pearson", 
+                           scaled = T))
+
+
+mod4_linp_aug
+```
+
+### Within-group errors are iid ~ N(0, var2)
+
+```{r mod4 Standardized Residuals vs. Fitted}
+ggplot(mod4_linp_aug, 
+       aes(x = .fitted, 
+           y = .stdresid))+
+  geom_hline(yintercept = 0, color = "red")+
+  geom_point(size = 3, alpha = .7)+
+  geom_smooth(method = "lm")
+```
+Looking good.  
+
+```{r mod4 Quantile-Quantile}
+ggplot(mod4_linp_aug, 
+       aes(sample = .stdresid))+
+  stat_qq()+
+  stat_qq_line()
+```
+Looking good.  
+
+### Random effects are iid ~ N(0,var1)
+
+On this plot, looking for normality.
+
+```{r mod4 QQ plot for Rep random effect}
+mod4_linp_randeff 
+
+ggplot(mod4_linp_randeff, 
+       aes(sample = estimate))+
+  stat_qq()+
+  stat_qq_line() 
+
+```
+b and xs random estimates are so small that seem to be all zero.  
+That's not a problem per se, just a fact around their variability.  
+
+## c) Model summary
+```{r mod4 ANOVA}
+summary(mod4_linp)
+
+```
+
+a, b, and xs are highly significant!
+
+## d) Final plot
+
+```{r mod4 final plot}
+ggplot(mod4_linp_aug, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, alpha = .7)+
+  geom_line(aes(y = .fixed), 
+            color = "forestgreen")
+
+```
+
+Problems with the plot:   
+- regression curve on the plot above is not continuous because it is based on our original levels of SR (40, 60, 80, 100, 120 k seeds/ha).
+
+-   similar to linear regression, no confidence interval.
+
+Solutions:   
+- to create a smoother look, we can simulate some SR data, use the model above to predict their yield, and plot that as a line.
+
+-   we can use bootstrap to create confidence intervals around the regression curve
+
+```{r mod4 better final plot}
+# Creating predictions
+nd <- nd %>%
+  mutate(mod4_yield_mgha = predict(mod4_linp, 
+                                   nd, 
+                                   level = 0))  
+
+# Non-linear prediction function  
+predict.fun.nl <- function(x) predict(x,
+                           newdata = nd,
+                           re.form = NA,
+                           level = 0)
+
+
+# Bootstrapping
+mod4_linp_boots <- boot_nlme(mod4_linp, 
+                             f = predict.fun.nl, 
+                             R = 200) %>%
+  confint() %>%
+  as.data.frame() %>%
+  rename(mod4_linp_lcl = `2.5 %`,
+         mod4_linp_upl = `97.5 %`)
+
+nd <- nd %>%
+  bind_cols(mod4_linp_boots)
+
+nd
+
+# Final plot
+ggplot(reg_dfw, 
+       aes(x = sr_ksha, 
+           y = yield_mgha))+
+  geom_point(size = 3, alpha = .7)+
+  geom_line(data = nd, 
+            aes(y = mod4_yield_mgha), 
+            color = "forestgreen")+
+  geom_ribbon(data = nd, aes(x = sr_ksha, 
+                             ymin = mod4_linp_lcl,
+                             ymax = mod4_linp_upl),
+              fill = "gray", 
+              alpha = 0.5, 
+              inherit.aes = FALSE)
+
+
+
+```
+
+# 7) Model comparison  
+## a) Visual comparison
+```{r comparison plot}
+ggplot(reg_dfw, aes(x = sr_ksha, y = yield_mgha))+
+  geom_point(size = 4, alpha = .6)
+
+
+```
+## Table comparison  
+```{r}
+
+```
+Based on the above, model 4 (linear-plateau) had the lowest AIC and thus should be used to find the optimum level of seeding rate.  
+
+# 8) Optimum on best model  
+Because our best model was the linear-plateau, let's find its seeding rate that optimized yield.  
+
+```{r optimum SR}
+
+
+```
+Based on the linear-plateau model, the level of seeding rate to optimize corn grain yield in this study was **73.47** thousand seeds/ha.  
+
+Now let's predict what was the yield at that seeding rate.  
+```{r yield at optimum SR}
+
+
+```
+At the optimum seeding rate of **73.47** thousand seeds/ha, corn grain yield was **13.45** Mg/ha.
+
+```{r final plot}
+ggplot(reg_dfw, aes(x = sr_ksha, y = yield_mgha))+
+  geom_point(size = 4, alpha = .6)+
+  geom_line(data = nd, aes(y = mod4_yield_mgha), 
+            color = "orange",
+            size = 1.5) 
+
+```
+# 9) Take-home  
+
+-   We use regression when both y and x are **numerical**  
+
+-   Finding optimum: should run multiple models, see which one fits the data best, and choose that one to estimate optimum
+
+-   Always check residuals! p-values alone do not tell you whether model is adequate for your data!
+
+# Quiz
+
