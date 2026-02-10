@@ -1,0 +1,307 @@
+---
+title: "Iteration"
+format: html
+---
+
+# Learning objectives  
+Today's learning objectives are to:   
+
+  - Understand the need for iteration and automation  
+  - Explore three different approaches to iteration and automation:  
+    - function writing  
+    - loops  
+    - list mapping  
+
+# Introduction  
+This exercise is adapted from the analysis performed in the paper **Santos, Bastos, et al. (2022). Identifying Nematode Damage on Soybean through Remote Sensing and Machine Learning Techniques**, https://www.mdpi.com/2073-4395/12/10/2404.
+
+This study evaluated the potential to predict different **nematode counts** using **drone-based remote sensing metrics** in soybeans.  
+
+A total of **43 georeferenced soil and plant samples** were collected from a field grown with **soybeans** and known to be previously infested with different nematode species.
+![](../data/site.png)
+
+Soil and soybeans root material from each sampling point were analyzed in a laboratory for different nematode species, including:  
+  - Meloidogyne incognita (mel)  
+  - Pratylenchus brachyurus (pb)  
+  - Heterodera glycines (het)  
+  
+On the same day that the soil and plant samples were collected, a drone-mounted multispectral sensor was also flown over the field. 
+
+Imagery data was extracted from each point where soil and plant samples were taken. Imagery data included reflectance in the bands of   
+  - red (r),  
+  - green (g),  
+  - blue (b),  
+  - near-infrared (nir),  
+  - red-edge (re)  
+
+# Tasks  
+Our goal with this data is to:  
+  - Calculate different vegetation indices using the bands  
+  - For each of the nematode variables, run all possible combinations of bivariate regression models, with each band and vegetation index as the single explanatory variable.  
+  
+For ex:  
+
+  number of Meloidogyne incognita nematode in the roots ~ reflectance on the green band  
+  
+We have a total of:  
+  - **response variable**: 10 nematode-related variables  
+  - **explanatory variables**: 5 bands + 10 vegetation indices  
+  - **total models**: 10 x 15 = 150 models
+
+# 1) Setup  
+
+Here is where we load the packages we will use.
+
+```{r setup}
+#| message: false
+#| warning: false
+
+
+# Loading packages
+library(tidyverse) # for data wrangling and plotting
+library(janitor) # clean column names
+library(knitr) # for figure displaying
+```
+
+Reading data.  
+```{r}
+#| message: false
+
+nematode
+
+nematode
+```
+  
+# 2) EDA  
+```{r summary}
+summary(nematode)
+```
+
+```{r density plot} 
+nematode 
+
+```
+
+# 3) Function writing - ndvi 
+The first step will be to calculate 10 different vegetation indices.  
+
+Vegetation indices represent different ways of combining reflectance data from different bands. One of the main formats of vegetation indices is the **normalized difference vegetation index**, that takes the form of:  
+
+$$ ndvi = \dfrac{(nir - vis)}{(nir + vis)}$$
+where **nir** is reflectance from the near-infrared band, and **vis** is reflectance from any band from the visible region (blue, red, green, red-edge).  
+
+One example of creating ndvi for the nir and red bands would be:  
+
+```{r}
+nematode
+```
+
+Since we're going to calculate this for each of the visible-region bands (5 in total), **let's write a function so we avoid some code repetition**.  
+
+```{r ndvi function}
+ndvi 
+
+```
+
+The **function name** is `ndvi`. 
+It takes 2 **arguments**:  
+  - nir: a vector with data on the near-infrared reflectance  
+  - vis: a vector with data on one of the visible bands reflectance
+
+The function **returns** a vector with the result of the ndvi calculation using the specific nir and visibile band information provided.  
+
+Let's see how that would compare to the previous step:  
+
+```{r}
+nematode 
+
+```
+
+Now that we created a function to help with one type of vegetation index, let's go ahead and compute all 10 different ones.  
+
+```{r}
+nematode_w <- nematode 
+  # Calculating ndvi-based indices
+  
+
+  # Calculating other non-ndvi-based indices
+  # For reference, see paper.
+  #mutate(sr = nir/r,
+  #       rdvi = ((nir-r)/(nir+r))^2,
+  #       savi = (((1+0.5)*(nir-r))/(nir+r+0.16)),
+  #       vari = (g-r)/(g+r-b),
+  #       evi = 2.5*(nir-r)/(nir+(6*r)-(7.5*b))+1,
+  #       nli=  ((nir^2)-r)/((nir^2)+r))
+
+nematode_w 
+```
+
+# 4) Function writing - CV
+Now, let's say we wanted to write a function to obtain some statistical summary metrics for each of the new variables we calculated.  
+
+Let's write a function to return to us the mean and coefficient of variation. If you recall, there is no function for CV in R, so let's also create that.  
+
+First, a function for CV.  
+```{r}
+meancv 
+  # Calculate intermediary steps of mean and sd
+
+  # Calculate cv
+
+  # Combine them into a data frame
+
+  # Return the data frame
+  
+  
+
+
+meancv
+```
+
+Let's apply it to one of the vegetation indices  
+```{r}
+
+```
+
+# 5) Loops  
+Different types of loops exist, with `for` and `while` loops being the most popular.  
+
+A `for` loop iterates through positions in a vector and apply the same task to each position, returning a result for each of them.  
+
+Now, let's say I wanted to calculate the mean and CV for each of the response and explanatory variable columns in our data set.  
+
+Since we will be performing the same task across many columns, we could create a loop where, for each column,   
+  - we apply the function `meancv`, 
+  - the function returns back the mean and CV,
+  - the loop appends all the results together  
+  
+Loops are very useful when **repeating the same task across different scenarios**.  
+
+In this case, the **task being repeated is to calculate mean and CV**, and the **different scenarios are the columns**.  
+
+```{r}
+nematode_w
+```
+
+Let's create a for loop to do that for us.  
+First, let's create an empty data frame scaffold to be populated by the results of the loop.  
+
+```{r}
+nematode_meancv 
+
+nematode_meancv
+```
+
+Each row above will be populated with the name of the variable, its mean and cv.  
+
+```{r}
+
+  # Getting the name of all columns
+
+  # Defining the name of the variable being analyzed in a given loop step
+
+  # Calculating mean and cv
+
+  # Appending results to the empty data frame  
+
+  # Print a message
+
+```
+
+Let's inspect `nematode_meancv`  
+```{r}
+nematode_meancv
+```
+
+# 6) List mapping  
+Another way of doing iteration is through mapping a function to different components of a list.  
+
+We can do that with the package `purrr` and some of its functions:  
+  - `map(x)` functions take one iterating element, x  
+  - `map2(x, y)` functions take two iterating elements, x and y  
+  - `pmap(x, y, ..., n)` functions take n iterating elements  
+
+One way of working with these functions is with the combo `group_by() + nest()` to create the iterating data frames, followed by `mutate()` and `map()` to apply a given function to each iterating piece.  
+
+Let's see that in practice.  
+
+The goal of the next chunk is to run linear models of the type `y ~ x`, where y is one of the response variables (we have a total of 10) and x is one of the explanatory variables (we have a total of 15).  
+
+In the end, we will have **150 models**, and I would like to keep only the one with the greatest R2 for each response variable.  
+
+This approach creates a bit of a brain-twist, since we are creating data sets (and other object types) inside of the initial data set.  
+
+
+```{r}
+nematode_mods 
+  # Pivotting longer for the response variables
+
+  # Pivotting longer for the explanatory variables  
+
+  # Creating groups of resp_var and exp_var
+
+  # Applying linear model to each element
+
+  # Extracting R2 for each element  
+
+
+```
+Above we used the `map()` function because we only had one iterating element (i.e., data).  
+
+Now, let's unnest the r2 values, then only keep the largest r2 for each response variable, and make some plots.  
+
+```{r}
+nematode_mods_sel 
+
+
+nematode_mods_sel
+```
+
+
+```{r}
+nematode_mods_sel_plots 
+  # Making scatterplots with r2 in subtitle
+
+  # Making scatterplots with r2 in subtitle, and correct x and y axis titles  
+
+
+```
+Now, we had 2 iterating elements to create `splot`, so we needed to use `map2()`.  
+
+Also, with more than 2 iterating elements to create `splot_better`, we used the function `pmap()` which accepts as many elements as needed.
+
+Let's print the first plot:
+```{r}
+
+```
+
+Now, let's print all of the plots  
+```{r}
+#| warning: false
+#| message: false
+
+
+```
+
+Finally, let's save all these plots as one figure.  
+```{r}
+library(gridExtra)
+
+allplots 
+
+allplots
+
+
+```
+
+
+# 7) Summary  
+In this exercise, we:  
+  - created two functions to simplify creating ndvi and cv  
+  - iterated through the calculation of mean and cv using a `for` loop  
+  - iterated through 150 sets of data to create 150 models using `map`  
+  - selected best models, plotted (using `map2()` and `pmap()`), and exported to file  
+
+  
+
+
