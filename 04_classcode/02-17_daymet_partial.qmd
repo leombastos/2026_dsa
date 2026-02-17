@@ -1,0 +1,200 @@
+---
+title: "Daymet"
+format: html
+---
+
+# Introduction  
+Open-source data bases are an important source of data, especially for larger-scale (both in time and space) projects that have some field-level data collected along with their spatial coordinate.  
+
+These open-source data bases may be related to crop, soils, weather, remote sensing, elevation, and many other potential variables.  
+
+These data can be pulled and used to create predictor variables in a machine learning workflow.  
+
+Today, we are going to explore how to explore a field-collected data set, and how to complement it by downloading and pre-processing an open-source data base for weather data.  
+
+# Learning objectives  
+Our learning objectives are to:  
+  - Learn about and implement the download and pre-processing of a spatial and temporal weather open-source data base  
+  - Pull weather data for multiple sites and years  
+  - Export it to file for future reuse  
+
+# Setup  
+```{r}
+#| message: false
+#| warning: false
+
+#install.packages("sf")
+#install.packages("daymetr")
+#install.packages("remotes")
+#remotes::install_github("ropensci/USAboundaries")
+#remotes::install_github("ropensci/USAboundariesData")
+
+library(tidyverse)
+library(USAboundaries) # for US state boundaries
+library(sf) # for US map
+library(daymetr)
+```
+
+```{r}
+field 
+
+field
+```
+
+# Study description  
+This data set comprises a study conducted across the Cotton Belt producing region of the US (from GA to CA) from 1980 to 2020.
+
+The goal of the study was to measure cotton fiber yield and quality in different sites and over time.  
+
+The data contains the following columns:  
+  - **year**: the year of the study  
+  - **site**: the location of the study  
+  - **lat**: the latitude (in degrees) of the location  
+  - **lon**: the longitude (in degrees) of the location  
+  - **strength_gtex**: cotton fiber strength (in g/tex)
+
+# EDA  
+```{r}
+summary(field)
+```
+How many unique years?  
+
+```{r unique years}
+
+```
+
+41 distinct years in the data set.  
+
+Now, how many unique sites?
+```{r unique sites}
+
+```
+
+65 unique sites.  
+
+What is the statistical distribution of fiber strength?  
+```{r fiber strength}
+
+```
+
+```{r}
+
+```
+
+# Open weather data - Daymet  
+**Daymet** is an open-source weather data base developed by NASA (https://daymet.ornl.gov).  
+
+> Daymet provides long-term, continuous, gridded estimates of daily weather and climatology variables by interpolating and extrapolating ground-based observations through statistical modeling techniques.  
+
+Data characteristics:    
+  - Spatial extent: North America (US, CAN, MEX)  
+  - Spatial resolution: **1 km**  
+  - Temporal resolution: **daily**  
+  - Temporal extent: **1980 to most recent full calendar year**  
+  - Variables included:  
+    - day length (secs/day)    
+    - precipitation (mm/day)  
+    - shortwave radiation (W/m2)  
+    - snow water equivalent (kg/m2)  
+    - maximum air temperature (C)  
+    - minimum air temperature (C)  
+    - water vapor pressure (Pa)  
+
+Daymet provides an application programing interface (API) for users to make queries and download data.  
+
+In R, we'll use a package called `daymetr` that facilitates makeing queries to Daymet API.  
+
+The main function we'll use is called `download_daymet()`. Let's check its documentation.  
+```{r}
+help("download_daymet")
+```
+
+From the documentation, we see we need to provide:  
+  - latitude (we have it)  
+  - longitude (we have it)  
+  - start and end of year to download (we have it)  
+  
+Let's try it with the first site-year on the data frame.  
+
+# Daymet - one site-year  
+```{r one site-year}
+field
+
+daymet_one 
+
+daymet_one
+```
+
+How many rows above? Why?  
+
+```{r}
+daymet_one 
+```
+How many rows above? Why?  
+
+We just pulled daily weather data for one site and one year. Great!  
+
+Now we just need to do that again for the remaining **697** site-years!  
+
+# Daymet - all site-years  
+For that, let's use the **map()** family of functions from the purrr package.  
+
+**WARNING**: the chunk below took about **3 minutes** to run on my laptop.  
+
+```{r}
+daymet_all 
+
+```
+
+Let's inspect weather data for the first site-year.  
+
+```{r}
+
+```
+
+Now let's unnest the weather column.  
+```{r}
+daymet_all_unnest 
+
+daymet_all_unnest
+
+```
+
+How many rows? Why?  
+
+# Exporting  
+We don't want to have to make an API call every time we'll work with this weather data.  
+
+Therefore, a best practice here is to pull weather data once and export it to file so we can reuse it any time without having to download again.  
+
+Let's do that below:  
+```{r}
+
+```
+
+
+# Summary  
+In this exercise, we:  
+  - Used year, longitude, and latitude to pull daily weather data from Daymet  
+  - Wrote code to automate and iterate this process for 698 site-years  
+  - Exported the data for future reuse  
+
+# Other open-source data APIs in R  
+There are MANY open-source data APIs relevant for agriculture applications, most of which have an R implementation.  
+
+Some of the ones I used in the past:  
+  - **USDA NASS crop statistics**: https://cran.r-project.org/web/packages/rnassqs/vignettes/rnassqs.html  
+  - Soil properties:  
+    - **POLARIS**: https://github.com/lhmrosso/XPolaris  
+    - **Soilsgrid**: https://rpubs.com/ials2un/soilgrids_webdav  
+    - **SSURGO**: https://search.r-project.org/CRAN/refmans/FedData/html/get_ssurgo.html    
+  - **Soil water**: https://leombastos.github.io/bastoslab/teaching/2023-aghack-vwc/2023-aghack-vwc.html     
+  - **Drought monitor**: https://droughtmonitor.unl.edu/DmData/DataDownload/WebServiceInfo.aspx    
+  - **Remote sensing**: https://github.com/bevingtona/planetR  
+  - **Elevation**: https://github.com/jhollist/elevatr  
+  
+
+
+
+
+
