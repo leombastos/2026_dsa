@@ -1,0 +1,179 @@
+---
+title: "Multivariate - K-means"
+format: html
+---
+
+# Learning objectives  
+Our learning objectives are to:  
+  - Run k-means for clustering  
+
+
+# Setup  
+```{r}
+#| message: false
+#| warning: false
+
+#install.packages("ggcorrplot")
+#install.packages("factoextra")
+#install.packages("ggpmisc")
+
+library(tidyverse)
+library(ggcorrplot)
+library(broom)
+library(car)
+library(factoextra)
+library(ggpmisc)
+```
+
+```{r}
+weather 
+
+weather
+```
+
+Since k-means only take numerical variables, let's select them now.  
+```{r selecting only numerical vars}
+weather_n <- weather %>%
+  dplyr::select(-c(year:strength_gtex))
+
+weather_n
+```
+
+# EDA  
+The EDA here is the same as for the PCA script, refer to that if needed.
+
+# k-means  
+k-means is an **unsupervised** clustering algorithm and partitions the data into k groups, where k is defined by the user.  
+
+k-means works by  
+
+- randomly choosing k samples from our data to be the initial cluster centers  
+- calculates the distance of all observations to the clusters centers  
+- assigns a cluster class to each observation based on closest distance  
+- using all members of a cluster, recalculates cluster mean  
+- repeats the entire process until cluster means stabilize  
+
+```{r k-means in action}
+knitr::include_graphics("https://miro.medium.com/max/960/1*KrcZK0xYgTa4qFrVr0fO2w.gif")
+
+```
+
+k-means:  
+
+- Is used for clustering  
+- Is an unsupervised analysis (no outcome)  
+- Only takes predictors  
+- Predictors need to be numerical  
+- Does not handle NAs  
+
+
+k-means is useful when clusters are circular, but can fail badly when clusters have odd shapes or outliers.  
+
+```{r clustering algorithms comparison}
+knitr::include_graphics("https://miro.medium.com/max/1400/1*oNt9G9UpVhtyFLDBwEMf8Q.png")
+
+```
+
+k-means does not normalize our data for us like PCA did, so we will need to do that before running the model.  
+
+```{r}
+# normalizing the data
+weather_norm  
+
+weather_norm
+```
+
+Also, we need to define the number of clusters we want.  
+Any thoughts?  
+Let's try 2.  
+
+```{r kmeans model }
+mod_km 
+
+mod_km
+```
+
+Since the choice of k can be subjective, we will need to find an objective way to select the value of k that most properly represents our dataset.  
+
+```{r choosing k - total error}
+# Total error x k
+
+```
+
+
+```{r choosing k - silhouette}
+# Silhouette width
+fviz_nbclust(weather_norm, 
+             method = "s",
+             k.max = 10,
+             FUNcluster = kmeans) 
+
+```
+
+total error: k=3-4  
+silhouette: k=4  
+
+Let's go with 4 clusters.  
+
+```{r mod_km4 }
+mod_km4 
+
+mod_km4
+```
+
+How many observations per cluster?
+```{r}
+
+```
+
+Now how can we visually inspect the resutls of k-means?  
+We can either  
+
+- add the cluster column to original dataset and explore the distribution of each variable against cluster id, OR  
+
+- use a function that summarises all the original variables into PCs and plots the cluster ids.  
+
+```{r cluster x variable boxplots}
+weather %>%
+  mutate(cluster = mod_km4$cluster,
+         cluster = factor(cluster)) %>%
+  pivot_longer(!c(year,site,cluster)) %>%
+  ggplot(aes(x = cluster, 
+             y = value, 
+             color = cluster))+
+    geom_boxplot(show.legend = F)+
+  facet_wrap(~name, scales = "free_y", ncol = 6)
+
+ggsave("../output/clustervalidation.png",
+       width = 10,
+       height = 20)  
+
+```
+  
+We could actually run ANOVA models for each original variable of the form  
+
+              var ~ cluster, 
+              for ex. mean_dayl.s_Jan ~ cluster  
+  
+and extract cluster mean and pairwise comparison to understand what variables had significant differences among clusters.  
+
+```{r kmeans PCA plot}
+
+```
+  
+Notice how, behind the scenes, the fviz_cluster function ran a PCA and is showing us a plot with PCs 1 and 2 on the axis (same result as we obtained on the PCA analysis).   
+
+
+# Summary  
+In this exercise, we covered:  
+
+  - When multivariate analysis can be used  
+  - k-means for clustering  
+  - How to validate results from k-means analysis  
+
+
+
+
+
+
+  

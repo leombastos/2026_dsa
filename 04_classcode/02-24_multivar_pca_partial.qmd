@@ -1,0 +1,537 @@
+---
+title: "Multivariate - PCA"
+format: html
+---
+
+# Learning objectives  
+Our learning objectives are to:  
+
+  - Explore what is and when to use multivariate analysis  
+  - Explore different types of multivariate analysis  
+  - Import our feature-engineered weather data set to be analyzed  
+  - Understand what is multicollinearity, its effects, implications, and remedies   
+  - Run principal component analysis (PCA) for dimensionality reduction  
+
+# Introduction  
+## Terminology  
+
+In the following general equation:  
+
+    y ~ x
+
+Y is normally referred to as:  
+  - Response variable  
+  - Dependent variable  
+  - Predicted variable  
+
+X is normally referred to as:  
+  - Explanatory variable  
+  - Independent variable  
+  - Predictor variable  
+
+## What is multivariate analysis?  
+
+Most common: multiple Xs (predictors)  
+
+               y ~ x1 + x2 + .... xn  
+               yield ~ precip + temp + som + hybrid  
+    
+Perhaps multiple Xs (predictors) without a Y (outcome)  
+
+              ~ x1 + x2 + .... xn
+
+While some can have multiple Ys (outcomes)  
+
+               y1 + y2 ~ x1 + x2 (MANOVA)  
+               yield + biomass ~ precip + temp  
+  
+## When to use multivariate?  
+When multiple predictors can be used to explain an outcome.  
+
+When multiple predictors can be used to create data-driven groups (clusters).  
+
+Commonly not a "designed experiment" analysis, but an exploratory relationship approach.  
+
+## Main types of multivariate  
+- Dimensionality reduction  
+    - **Principal component analysis (PCA)**  
+    - Principal coordinate analysis (PCoA)  
+    - Factor analysis  
+    
+- Clustering 
+    - **k-means**, c-means, x-means  
+    - Non-numerical multidimensional scaling  
+    - nearest neighbor  
+  
+- Relationship between variables / Prediction  
+  - Multiple linear regression/stepwise regression  
+  - **Random forest**    
+  - **Conditional inference tree**  
+
+## A few ways to characterize multivariate analysis  
+- Based on analysis goal:  
+
+  - Decrease number of dimensions  
+  - Create clusters  
+  - Establish significant relationships among multiple predictors and an outcome.  
+
+- Based on Y (outcome) existence:
+    - Supervised  
+    - Unsupervised  
+
+- If Y exists, based on its type:  
+    - Categorical: classification  
+    - Numerical: regression  
+
+# Setup  
+```{r}
+#| message: false
+#| warning: false
+
+#install.packages("ggcorrplot")
+#install.packages("factoextra")
+#install.packages("ggpmisc")
+
+library(tidyverse)
+library(ggcorrplot)
+library(broom)
+library(car)
+library(factoextra)
+library(ggpmisc)
+```
+
+```{r}
+weather 
+
+weather
+```
+
+
+# EDA  
+How are variables related? Any strong correlations that we should watch out for?  
+
+Let's create a correlation matrix
+```{r correlation matrix p-values}
+# Estimating significance matrix
+p.mat 
+
+p.mat
+```
+
+Plotting  
+```{r correlation matrix plot}
+weather %>%
+  dplyr::select(-year, -site) %>%
+  cor() %>%
+  ggcorrplot(hc.order = TRUE, 
+             digits = 1,
+             type = "lower", 
+             p.mat = p.mat, 
+             sig.level = 0.05,
+             insig = "blank",
+             lab = TRUE)
+
+ggsave("../output/corrmat.png",
+       height = 25,
+       width = 22,
+       bg = "white")
+```
+
+A bit difficult to see because we have so many predictors, let's extract in table format.  
+
+```{r highest correlations}
+weather %>%
+  dplyr::select(-year, -site) %>%
+  cor() %>% # calculates r (-1 to 1)
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  pivot_longer(cols = -rowname) %>%
+  filter(abs(value) > .85 & value != 1) %>%
+  arrange(desc(value)) %>%
+  distinct(value, .keep_all = T)
+
+```
+
+```{r lowest correlations}
+weather %>%
+  dplyr::select(-year, -site) %>%
+  cor() %>% # calculates r (-1 to 1)
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  pivot_longer(cols = -rowname) %>%
+  filter(abs(value) < .05 & value != 1) %>%
+  arrange(abs(value)) %>%
+  distinct(value, .keep_all = T)
+
+```
+
+How do variables relate to fiber strength in a bivariate relationship?  
+
+```{r r2}
+weather %>%
+  dplyr::select(-site, -year) %>%
+  pivot_longer(cols=-strength_gtex) %>%
+  group_by(name) %>%
+  nest() %>%
+  mutate(r2 = map_dbl(data,
+                  ~lm(strength_gtex ~ value,
+                      data = .x) %>%
+                    glance(.) %>%
+                    pull(r.squared)
+                  )) %>%
+  arrange(desc(r2))
+
+
+```
+
+```{r r2 plot}
+weather %>%
+  dplyr::select(-site, -year) %>%
+  pivot_longer(cols=-strength_gtex) %>%
+  group_by(name) %>%
+  nest() %>%
+  mutate(r2 = map_dbl(data,
+                  ~lm(strength_gtex ~ value,
+                      data = .x) %>%
+                    glance(.) %>%
+                    pull(r.squared)
+                  )) %>%
+  arrange(desc(r2)) %>%
+  ungroup() %>%
+  slice(1:6) %>% 
+  unnest(data) %>%
+  ggplot(aes(x = value, 
+             y = strength_gtex))+
+  geom_point(shape = 21, 
+             alpha = .7, 
+             fill = "purple")+
+  geom_smooth(method = "lm", 
+              se = F, 
+              color = "black", 
+              size = 1)+
+  facet_wrap(~name, 
+             scales = "free_x", 
+             ncol=2) 
+
+```
+
+# Multicollinearity 
+## Concepts  
+Multicollinearity definition: more than two explanatory variables in a multiple regression model are highly linearly related.  
+
+
+Multicollinearity is an issue because:  
+
+- Model estimates magnitude and direction (+ or -) can change for multicollinear variables compared to a non-multicollinear model.  
+  
+- Model estimates standard error are inflated, directly affecting p-values, estimate significance, and power.  
+  
+
+## Applied example  
+Let's select a few variables to run some tests.  
+Two uncorrelated variables:
+```{r uncorrelated}
+weather %>%
+  ggplot(aes(x = mean_dayl.s_Apr, 
+             y = sum_prcp.mm_Oct)) +
+  geom_point() +
+  geom_smooth(method="lm") +
+  stat_correlation()
+```
+
+Two correlated variables:
+```{r correlated}
+weather %>%
+  ggplot(aes(x = mean_dayl.s_Apr, 
+             y = mean_dayl.s_May))+
+  geom_point() +
+  geom_smooth(method="lm")
+
+```
+
+Now let's fit some models with one or two uncorrelated and correlated variables explaining fiberstrength and see what happens.  
+
+```{r strength ~ mean_dayl.s_Apr}
+lm_dayl.apr 
+
+lm_dayl.apr
+
+```
+
+```{r strength ~ sum_prcp.mm_Oct}
+lm_prp.oct <- lm(strength_gtex ~ sum_prcp.mm_Oct,
+   data = weather) %>%
+  tidy() %>%
+  filter(term!="(Intercept)") %>%
+  mutate(mod="lm_prp.oct")
+
+lm_prp.oct
+```
+
+```{r strength ~ mean_dayl.s_Apr + sum_prcp.mm_Oct}
+lm_dayl.prcp <- lm(strength_gtex ~ mean_dayl.s_Apr + 
+                   sum_prcp.mm_Oct,
+   data = weather) %>%
+  tidy() %>%
+  filter(term != "(Intercept)") %>%
+  mutate(mod = "lm_2var.uncor")
+
+lm_dayl.prcp
+
+```
+
+```{r strength ~ mean_dayl.s_Apr + mean_dayl.s_May}
+lm_daylapr.daylmay <- lm(strength_gtex ~ mean_dayl.s_Apr + 
+                  mean_dayl.s_May,
+   data = weather) %>%
+  tidy() %>%
+  filter(term!="(Intercept)") %>%
+  mutate(mod="lm_2var.cor")
+
+lm_daylapr.daylmay
+
+```
+
+```{r Checking multicollinearity}
+lm_dayl.apr %>%
+  bind_rows(lm_prp.oct, 
+            lm_dayl.prcp,
+            lm_daylapr.daylmay) %>%
+  mutate(mod=factor(mod,
+                    levels=c("lm_dayl.apr",
+                             "lm_prp.oct",
+                             "lm_2var.uncor",
+                             "lm_2var.cor"))) %>%
+  filter(term != "mean_dayl.s_May") %>%
+  ggplot(aes(x=mod))
+
+```
+
+What has happened with **mean_dayl.s_April** and **sum_prcp.mm_Oct** estimates and standard error when modeled i) alone, or with another uncorrelated variable vs. ii) with another correlated variable?
+
+One way to check the degree of multicollinearity between two predictos is with the variance inflation factor (VIF).  
+
+VIF values range from 1 to positive infinite.  
+General rule of thumb:  
+
+- VIF ~ 1: no multicollinearity  
+- VIF between 1 and 5: moderate multicollinearity  
+- VIF > 5: severe multicollinearity  
+
+Let's check the variance inflation factor (VIF) of both uncorrelated and correlated models
+```{r vif uncorrelated}
+# Uncorrelated
+```
+
+
+```{r vif correlated}
+# Correlated
+lm(strength_gtex ~ mean_dayl.s_Apr + 
+                  mean_dayl.s_May,
+   data = weather) %>%
+  vif()
+
+```
+
+## Dealing with multicollinearity  
+So what now?  
+How can we deal with correlated variables in a multivariate approach?  
+Options:  
+
+- Dimensionality reduction  
+    - By hand (selecting predictors based on previous knowledge, literature, etc.)  
+    - By math  
+  
+- Algorithm that handles multicollinearity  
+    - Variable selection    
+    - Multivariate by ensembling multiple bivariates   
+
+Many multivariate approaches deal with some sort of similarity/dissimilarity measure among predictors.  
+
+In those cases, predictors with vastly different scales (e.g. mean_tmin.c_Jan from -10 to 10 C vs mean_dayl.s_Jul from 48000 to 51000) need to be normalized so measurement scale does not affect variable importance.    
+
+Thus, our numerical predictor variables need to be normalized (center and scale) before starting our multivariate analysis.  
+
+Some analysis do the normalization for you (like PCA), and others don't (like k-means), so need to be aware of this to ensure data is normalized.  
+
+Since both PCA and k-means only take numerical variables, let's select them now.  
+```{r selecting only numerical vars}
+weather_n 
+
+weather_n
+```
+
+# PCA  
+Principal component analysis (PCA) is a dimensionality reduction approach that accomodates only numerical variables.  
+
+Finds linear relationships among predictors that can be represented in a lower number of uncorrelated dimensions.  
+
+Works well when at least some predictors are correlated.  
+
+PCA:  
+
+- Is used for dimensionality reduction  
+- Is an unsupervised analysis (no outcome)  
+- Only takes predictors  
+- Predictors need to be numerical  
+
+Some PCA properties:  
+
+- The number of PCs calculated is the same as the number of variables in the data set (e.g., in our case, 72).  
+
+- The overall variance explained by each PC is greatest for PC1 and decreases as PC number increases (e.g., PC72 will explain the least variance).  
+
+- All PCs are **orthogonal** (i.e., independent of each other).  
+
+- The goal is to select a small number of PCs that explain a minimum threshold of the total variance (e.g., 70%).  
+
+```{r pca in action}
+knitr::include_graphics("https://miro.medium.com/v2/resize:fit:1200/1*V4H3Cu8qGr_90WANKSO9BA.gif")
+```
+Let's run PCA for our weather data.  
+
+```{r pca model}
+mod_pca 
+
+```
+
+## Choosing number of PCs  
+Based on scree plot (total variance):  
+```{r pca checking number of components}
+# Scree plot
+
+```
+    
+PCs 1 and 2 explain ~35% and ~26% (61%) of total variance.
+This indicates that original variables were correlated (as we expected).   
+
+If wanted to use enough PCs to explain 70% of total variance, how many would we need?  
+```{r PCs to explain 70pct variance}
+
+
+```
+    
+We would need 4 PCs.  
+Normally we wish to use 2-3 PCs, but 4 is certainly better than 72 original variables.  
+
+## Inspecting PCs  
+Let's inspect PC1 through the loadings (weights) of each variable towards it.  
+
+What are the weights that each variable received in this PC?  
+```{r PC1 weights}
+mod_pca$rotation %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "var") %>%
+  ggplot(aes(x = reorder(var,desc(PC1)), 
+             y = PC1))+
+  geom_bar(stat = "identity", 
+           aes(fill = PC1), 
+           show.legend = F)+
+  scale_fill_gradient(low = "red", high = "blue")+
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1))
+
+```
+
+Which variables contributed most to PC1, regardless of direction?  
+
+```{r variables contributing to PC1}
+
+```
+  
+Let's check the eigenvectors for both PCs 1 and 2 variables:  
+
+```{r pca variable contribution }
+fviz_pca_var(mod_pca, 
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+
+```
+  
+The longer is the eigenvector for a given variable, the more important it is towards that PC.  
+
+Let's plot PC1 vs PC2 scores, look for any groupings.  
+
+```{r PC1 vs PC2}
+
+```
+  
+Appears that some groups exist.  
+
+
+What did we learn?  
+
+- Some original variables strongly correlated  
+- Need at least 4 PCs to cover ~70% of original variables variance  
+- Most important variables in PC1 were related to day length in winter and summer months.  
+
+What now?  
+Let's add the first 4 PCs to our original dataset and run a regression versus grain yield.    
+
+```{r pca scores}
+# Extract first 4 PCs scores
+pca_scores 
+
+pca_scores
+```
+
+```{r pca regression}
+# Adding PCs 1-4 scores to original data set
+weather_postpca 
+
+# Regression of yield ~ PCs
+
+lm_pca 
+
+# Summary  
+summary(lm_pca)
+```
+
+
+```{r pca regression}
+# Checking VIF
+
+```
+
+```{r pca regression plots}
+# Plotting strength vs PC1
+
+```
+
+
+```{r pca regression plots}
+# Plotting strength vs PC2
+ggplot(weather_postpca, 
+       aes(x = PC2, y = strength_gtex))+
+  geom_point()+
+  geom_smooth(method = "lm")
+
+```
+
+```{r pca regression plots}
+# Plotting strength vs PC3
+ggplot(weather_postpca, 
+       aes(x = PC3, y = strength_gtex))+
+  geom_point()+
+  geom_smooth(method = "lm")
+
+```
+
+Only PCs 2 and 3 explained strength (look at which variables were most important to each PC for interpretation).  
+
+As expected, PCs were not multicollinear (VIF=1).  
+
+# Summary  
+In this exercise, we covered:  
+
+  - When multivariate analysis can be used  
+  - How multicollinearity is an issue and what to do to fix it   
+  - PCA for dimensionality reduction  
+  - How to validate results from PCA   
+
+
+
+
+  

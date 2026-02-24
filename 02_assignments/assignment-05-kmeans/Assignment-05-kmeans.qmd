@@ -1,0 +1,59 @@
+---
+title: "Assignment 5 - K-means"
+author: "YOUR NAME HERE"  
+format:
+  html:
+    code-fold: true 
+    embed-resources: true
+    toc: true
+    number-sections: true
+    theme: cerulean
+---
+
+# Goal of this assignment  
+The goal of this assignment is for you to **explore the k-means algorithm** learned in class.  
+
+In specific, you will be asked to:  
+  - Use a different number of k than what we did in class,  
+  - Validate the results of the new model, and  
+  - Compare your results with those found in class  
+
+# Instructions  
+
+  - Move this script into the `code` subfolder of your `06_multivar` project  
+  - On this script, fill your name under the `title` section of the YAML  
+  - Go back to the class k-means script, choose a different number of k than what we did in class, and run it.    
+
+# Questions  
+## 1. What number of k did you select? Why?  
+
+## 2. How many observations are there in each cluster?  
+
+## 3. Using the `fviz_cluster()` function, import here the original plot with k=4 did in class, and the new plot with the number of k you selected for this exercise. How do they visually compare? Which one seems to be a better choice, and why?  
+
+
+# Submitting your work  
+Once you have developed all the code and answers, make sure to Render this quarto file.  
+
+**Notes on rendering**:  
+
+- Make sure to render your work and inspect how the final html look like.  
+- If it does not look professional for whatever reason, then fix the issue, re-render it, recheck.  
+- Only send me your work once your html file looks professional.  
+  - **DO NOT** delete the file's heading levels (# and ##). They set up the proper heading 1 and 2 levels, and I use them to guide my grading.  
+  - If a given chunk is also outputting warnings or messages, inhibit this behavior by changing the chunk options `message` and `warning` to `FALSE` (I'll demo this in a moment).  
+  
+  - If, after rendered, 2 lines of text are connected and you wish to "break line" between them, add 2 extra spaces after the first one (I'lld demo this in a moment).  
+
+After rendering, an .html file will be created on your `code` folder.  
+
+Rename this file to `Assignment-05-kmeans-LASTNAME.html`.    
+
+For ex., mine would be `Assignment-05-kmeans-Bastos.html`.
+
+Submit your work by uploading the **html** file to **eLC Assignment #5 - K-means** by Monday March 2nd 11:59 pm.  
+  
+
+
+
+
