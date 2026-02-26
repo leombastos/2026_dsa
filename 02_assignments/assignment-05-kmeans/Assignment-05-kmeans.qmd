@@ -19,7 +19,12 @@ In specific, you will be asked to:
   - Compare your results with those found in class  
 
 # Instructions  
+You will first need to watch (and code along with) the following k-means video:
 
+  - k-means lab: https://youtu.be/GFgMp5tYiMU?si=CI0E-2r-cYZLGVL1 (start from beginning of video, watch till the 01:10)  
+  - The partial script for the video above is in our GitHub repository, 04-classcode, **02-24_multivar_kmeans_partial.qmd**. Move the script mentioned above into the `code` subfolder of your `06_multivar` project
+  
+**AFTER watching the video and developing the code in class**, then start working on this HW assignment (instructions below):
   - Move this script into the `code` subfolder of your `06_multivar` project  
   - On this script, fill your name under the `title` section of the YAML  
   - Go back to the class k-means script, choose a different number of k than what we did in class, and run it.    
