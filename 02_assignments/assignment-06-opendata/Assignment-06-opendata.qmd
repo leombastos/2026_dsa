@@ -1,0 +1,74 @@
+---
+title: "Assignment 6 - Open data and API"
+author: "YOUR NAME HERE"  
+format:
+  html:
+    code-fold: true 
+    embed-resources: true
+    toc: true
+    number-sections: true
+    theme: cerulean
+---
+
+# Goal of this assignment  
+The goal of this assignment is for you to leverage open data APIs in R related to your field of study.  
+
+In specific, you will be asked to:  
+  - Identify an open data base related to your field of study  
+  - Retrieve data from it into R (bonus points if through an API instead of manually)  
+  - Create questions one could ask of these data, and answer them with wrangling, tables, and plots  
+
+# Instructions  
+1. Identify an open data in relation to your field of study. The minimum requirements for these data are:  
+  - It needs to be open (i.e., public data that anyone can access)  
+  - It needs to report some variable of importance across time (e.g., multiple days, months, years, etc.) and/or space (e.g., cities, counties, states, countries, etc.), ideally both.  
+  
+2. Bring these data into R, bonus points if you use an API for that (instead of manually)  
+
+3. Create 6 questions you can ask of these data. Of these questions:  
+  - At least 4 should require some wrangling to be answered (like a group_by and summarise, etc.)  
+  - At least 3 should be answered with a graph  
+
+# Questions  
+## 1. What is your field of study?  
+
+## 2. What is the open data you identified? Please explain it in terms of its source (website, which agency reported it), variable of importance, temporal and spatial characteristics, and anything else relevant for someone outside of your field of study to fully understand what it represents.  
+
+## 3.  
+
+## 4.  
+
+## 5.  
+
+## 6.  
+
+## 7.  
+
+## 8.  
+
+
+# Submitting your work  
+Once you have developed all the code and answers, make sure to Render this quarto file.  
+
+**Notes on rendering**:  
+
+- Make sure to render your work and inspect how the final html look like.  
+- If it does not look professional for whatever reason, then fix the issue, re-render it, recheck.  
+- Only send me your work once your html file looks professional.  
+  - **DO NOT** delete the file's heading levels (# and ##). They set up the proper heading 1 and 2 levels, and I use them to guide my grading.  
+  - If a given chunk is also outputting warnings or messages, inhibit this behavior by changing the chunk options `message` and `warning` to `FALSE` (I'll demo this in a moment).  
+  
+  - If, after rendered, 2 lines of text are connected and you wish to "break line" between them, add 2 extra spaces after the first one (I'lld demo this in a moment).  
+
+After rendering, an .html file will be created on your `code` folder.  
+
+Rename this file to `Assignment-06-opendata-LASTNAME.html`.    
+
+For ex., mine would be `Assignment-06-opendata-Bastos.html`.
+
+Submit your work by uploading the **html** file to **eLC Assignment #6 - open data** by Monday March 16 11:59 pm.  
+  
+
+
+
+
