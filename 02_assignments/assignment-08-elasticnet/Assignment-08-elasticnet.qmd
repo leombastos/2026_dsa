@@ -1,0 +1,60 @@
+---
+title: "Assignment 8 - Elastic net reading material"
+author: "YOUR NAME HERE"  
+format:
+  html:
+    code-fold: true 
+    embed-resources: true
+    toc: true
+    number-sections: false
+    theme: cerulean
+---
+
+# Goal of this assignment  
+The goal of this assignment is for you to read some e-book chapters and answer some questions related to it.  
+
+In specific, you will be asked to read two resources:  
+
+1) Tidy modeling with R e-book:  
+  - Read **Chapter 1 - Software for modeling** (https://www.tmwr.org/software-modeling)  
+  - Read **Chapter 2 - Whole game** (https://aml4td.org/chapters/whole-game.html) 
+  
+2) Hands-on ML with R e-book:  
+  - Read **Chapter 6 - Regularized Regression**: https://bradleyboehmke.github.io/HOML/regularized-regression.html 
+
+# Instructions  
+   
+
+# Questions  
+## 1.   
+
+## 2.   
+
+## 3. 
+
+
+# Submitting your work  
+Once you have developed all the code and answers, make sure to Render this quarto file.  
+
+**Notes on rendering**:  
+
+- Make sure to render your work and inspect how the final html look like.  
+- If it does not look professional for whatever reason, then fix the issue, re-render it, recheck.  
+- Only send me your work once your html file looks professional.  
+  - **DO NOT** delete the file's heading levels (# and ##). They set up the proper heading 1 and 2 levels, and I use them to guide my grading.  
+  - If a given chunk is also outputting warnings or messages, inhibit this behavior by changing the chunk options `message` and `warning` to `FALSE` (I'll demo this in a moment).  
+  
+  - If, after rendered, 2 lines of text are connected and you wish to "break line" between them, add 2 extra spaces after the first one (I'lld demo this in a moment).  
+
+After rendering, an .html file will be created on your `code` folder.  
+
+Rename this file to `Assignment-08-enetread-LASTNAME.html`.    
+
+For ex., mine would be `Assignment-08-enetread-Bastos.html`.
+
+Submit your work by uploading the **html** file to **eLC Assignment #8 - Elastic net read** by Wednesday March 18 11:59 pm.  
+  
+
+
+
+

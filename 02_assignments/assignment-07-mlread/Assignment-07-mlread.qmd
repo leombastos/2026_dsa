@@ -6,30 +6,41 @@ format:
     code-fold: true 
     embed-resources: true
     toc: true
-    number-sections: true
+    number-sections: false
     theme: cerulean
 ---
 
 # Goal of this assignment  
-The goal of this assignment is for you to read chapters from a book and answer some questions related to it.  
+The goal of this assignment is for you to read a blog post and answer some questions related to it.  
 
-In specific, you will be asked to:  
-  - Read chapters of the book "An Introduction to statistical learning"  
-  - Answer questions based on your reading.
+In specific, you will be asked to read one resource:  
 
+1) Introduction to ML blog post:  
+  - Read this blog post for an introduction to machine learning: [link](https://vas3k.com/blog/machine_learning/)  
+  - If you have time, read in its entirety.  
+  - If you are short on time, you **can skip** Parts 2 (reinforcement learning) and 4 (neural networks and deep learning).  
+  
 # Instructions  
-   
+After reading the blog post, answer the following questions.  
+**NOTE**: you MUST paraphrase your answer.    
+**Copy and Paste = Plagiarism = 0% grade**  
 
 # Questions  
-## 1. What number of k did you select? Why?  
+## 1. In your own words, describe what is machine learning.   
 
-## 2. How many observations are there in each cluster?  
+## 2. What are the main types of ML? List and describe them in 1-2 sentences each.   
 
-## 3. Using the `fviz_cluster()` function, import here the original plot with k=4 did in class, and the new plot with the number of k you selected for this exercise. How do they visually compare? Which one seems to be a better choice, and why?  
+## 3. Define supervised and unsupervised ML.  
+
+## 4. List two algorithms/analysis considered supervised, and provide one application example.  
+
+## 5. List two algorithms/analysis considered unsupervised, and provide one application example.  
+
+## 6. In ensemble learning, what is the difference between bagging and boosting?  
 
 
 # Submitting your work  
-Once you have developed all the code and answers, make sure to Render this quarto file.  
+Once you have developed all the answers, make sure to Render this quarto file.  
 
 **Notes on rendering**:  
 
