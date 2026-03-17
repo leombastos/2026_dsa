@@ -17,20 +17,21 @@ In specific, you will be asked to read two resources:
 
 1) Tidy modeling with R e-book:  
   - Read **Chapter 1 - Software for modeling** (https://www.tmwr.org/software-modeling)  
-  - Read **Chapter 2 - Whole game** (https://aml4td.org/chapters/whole-game.html) 
-  
+
 2) Hands-on ML with R e-book:  
   - Read **Chapter 6 - Regularized Regression**: https://bradleyboehmke.github.io/HOML/regularized-regression.html 
 
 # Instructions  
-   
+Read the materials above and answer the following questions, on this file:     
 
 # Questions  
-## 1.   
+## 1. What is the difference between regression and classification? What is the main part of the model that changes? Provide an example of each.    
 
-## 2.   
+## 2. List the general phases of a typical path to determining an appropriate model.    
 
-## 3. 
+## 3. Under which cases is regularization helpful?  
+
+## 4. What are the three common penalty parameters we can implement when regularizing a model? List their names and explain how they operate.   
 
 
 # Submitting your work  
