@@ -1,0 +1,475 @@
+---
+title: "Elastic Net"
+format: html
+---
+
+# Learning objectives  
+Our learning objectives are to:  
+  - Understand linear regression penalization types 
+  - Use the ML framework to:  
+    - pre-process data
+    - train an elastic net model 
+    - evaluate model predictability 
+
+# Introduction  
+As we previously learned, linear regression models can suffer from **multicollinearity** when two or more predictor variables are highly correlated.  
+
+The methods we mentioned to overcome multicollinearity include:  
+  - Dimensionality reduction (e.g., PCA)  
+  - Variable selection:
+    - by hand
+    - by models  
+    
+One approach to use models to perform variable selection is through applying a **regularization** to the model in the form of **penalties**.  
+
+In **linear regression** (which is fit with ordinary least squares-OLS, prone to multicollinearity), model coefficients are estimated by MINIMIZING the **sum of squares of the error** (SSE), which is the sum of all square distances from each observation to the regression line (observed - predicted = residual).  
+
+![](https://bradleyboehmke.github.io/HOML/06-regularized-regression_files/figure-html/hyperplane-1.png)  
+
+$$ minimize(SSE) $$
+
+In **regularized linear regression**, penalties are applied on the SSE.
+
+When penalties are applied, the coefficient of unimportant and/or correlated variables get constrained, reducing their influence in the model.  
+There are three common penalty parameters we can implement:  
+
+  - Ridge
+  - Lasso (or LASSO)
+  - Elastic net (or ENET), which is a combination of ridge and lasso.
+
+## Penalties  
+
+## Ridge penalty (L2)  
+The size of this penalty, referred to as L2 (or Euclidean) norm, can take on a wide range of values, which is controlled by the **tuning parameter λ**.  
+
+$$ minimize (SSE + L2) $$
+
+where
+
+$$ L2 = \lambda 
+\begin{equation}
+\sum_{j=1}^{p} \beta_{j}^2
+\end{equation} $$  
+
+When λ = 0, there is no effect and our objective function equals the normal ordinary least squares (OLS) regression objective function of simply minimizing SSE. 
+
+However, as λ → ∞, the penalty becomes large and forces the coefficients toward zero (but not all the way), as in the figure below. 
+
+![](https://bradleyboehmke.github.io/HOML/06-regularized-regression_files/figure-html/ridge-coef-example-1.png)
+
+However, ridge regression does not perform feature selection and will **retain all available features in the final model**.   
+
+Therefore, a ridge model is good if you believe there is a need to retain all features in your model yet reduce the noise that less influential variables may create (e.g., in smaller data sets with severe multicollinearity).   
+
+If greater interpretation is necessary and many of the features are redundant or irrelevant then a lasso or elastic net penalty may be preferable.
+
+## Lasso penalty (L1)  
+The lasso (least absolute shrinkage and selection operator) penalty is an alternative to the ridge penalty that requires only a small modification. The only difference is that we swap out the  
+L2 norm for an L1 norm.  
+
+$$ minimize (SSE + L1) $$
+
+where
+
+$$ L1 = \lambda 
+\begin{equation}
+\sum_{j=1}^{p} |\beta_{j}|
+\end{equation} $$
+
+Whereas the ridge penalty pushes variables to approximately but not equal to zero, the **lasso** penalty will actually **push coefficients all the way to zero** as in the below figure:  
+
+![](https://bradleyboehmke.github.io/HOML/06-regularized-regression_files/figure-html/lasso-coef-example-1.png)
+
+Switching to the lasso penalty not only improves the model but it also **conducts automated feature selection**.
+
+##  Ridge + Lasso = Elastic net  
+
+A generalization of the ridge and lasso penalties, called the elastic net, **combines the two penalties**.  
+
+$$ minimize (SSE + L2 + L1) $$
+
+Although lasso models perform feature selection, when two strongly correlated features are pushed towards zero, one may be pushed fully to zero while the other remains in the model. Furthermore, the process of one being in and one being out is not very systematic.   
+
+In contrast, the ridge regression penalty is a little more effective in systematically handling correlated features together.   
+
+Consequently, the advantage of the elastic net penalty is that it **enables effective regularization** via the ridge penalty with the **feature selection** characteristics of the lasso penalty, as in the figure below:    
+
+![](https://bradleyboehmke.github.io/HOML/06-regularized-regression_files/figure-html/elastic-net-coef-example-1.png)
+
+# Setup  
+```{r}
+#| message: false
+#| warning: false
+
+#install.packages("glmnet")
+#install.packages("vip")
+#install.packages("tidymodels")
+
+library(tidymodels)
+library(tidyverse)
+library(glmnet)
+library(vip)
+
+```
+
+```{r weather}
+weather <- read_csv("../data/weather_monthsum.csv")
+
+weather
+```
+
+# ML workflow  
+Let's use the workflow defined in the lecture below.  
+In R, we will use many packages built specifically for different steps on this workflow, all of which use tidyverse principles.    
+
+These packages are made available as a bundle through the meta-package `tidymodels` (https://www.tidymodels.org/packages/), and include:  
+  - `rsamples` for data split and resampling  
+  - `recipes` for data processing  
+  - `parsnip` to specify model types and engines  
+  - `tune` to fine-tune hyper-parameters  
+  - `dials` to create grids  
+  - `yardstick` to assess performance  
+
+## 1. Pre-processing  
+Here's where we perform **data split** and **data processing**.  
+
+### a. Data split  
+For data split, let's use **70% training / 30% testing**.
+
+```{r weather_split}
+# Setting seed to get reproducible results  
+set.seed(931735)
+
+# Setting split level  
+weather_split 
+
+weather_split
+```
+
+
+```{r weather_train}
+# Setting train set 
+weather_train 
+
+weather_train
+```
+How many observations?
+
+```{r weather_test}
+# Setting test split
+weather_test 
+
+weather_test
+```
+How many observations?  
+
+Let's check the distribution of our predicted variable **strength_gtex** across training and testing: 
+```{r distribution}
+ggplot() +
+  geom_density(data = weather_train, 
+               aes(x = strength_gtex),
+               color = "red") +
+  geom_density(data = weather_test, 
+               aes(x = strength_gtex),
+               color = "blue") 
+  
+```
+Let's go back to the split chunk and use **stratified sampling** based on our predicted variable **strength_gtex**.
+
+
+
+Now, we put our **test set** aside and continue with our **train set** for training.  
+
+
+  
+### b. Data processing  
+Before training, we need to perform some processing steps, like  
+  - **removing unimportant variables**  
+  - **performing PCA on the go**    
+  - normalizing  
+  - dropping NAs  
+  - removing columns with single value  
+  - others?  
+
+For that, we'll create a **recipe** of these processing steps. 
+
+This recipe will then be applied now to the **train data**, and easily applied to the **test data** when we bring it back at the end.
+
+Creating a recipe is as easy way to port your processing steps for other data sets without needing to repeat code, and also only considering the data it is being applied to.  
+
+Different model types require different processing steps.  
+Let's check what steps are required for an elastic net model (linear_reg).
+We can search for that in this link: https://www.tmwr.org/pre-proc-table  
+You can find all available recipe step options here: https://tidymodels.github.io/recipes/reference/index.html
+
+```{r weather_recipe}
+weather_recipe 
+  # Defining predicted and predictor variables
+
+  # Removing year, site, and weather outside of growing season  
+
+  # Normalizing
+  #step_normalize(all_numeric_predictors()) %>%
+
+  # Decorrelating
+  #step_pca(all_numeric_predictors(), threshold = .8)
+
+weather_recipe
+```
+
+Now that we have our recipe ready, we **need to apply it** to the training data in a process called prepping:
+
+```{r weather_prep}
+weather_prep 
+
+weather_prep
+```
+
+
+Now, we're ready to start the model training process!
+
+## 2. Training  
+### a. Model specification  
+First, let's specify:  
+  - the **type of model** we want to train  
+  - which **engine** we want to use  
+
+An elastic net model is a linear regression model, penalized.  
+
+Elastic net **hyperparameters**:  
+  - **penalty**: equivalent to lambda  
+  - **mixture**: 0 (ridge) to 1 (lasso)  
+
+Let's create a model specification that will **fine-tune** these for us.
+
+A given model type can be fit with different engines (e.g., through different packages). Here, we'll use the **glmnet** engine/package.  
+  
+```{r enet_spec}
+enet_spec  
+  # Specifying linear regression as our model type, asking to tune the hyperparameters
+
+  # Specify the engine
+
+
+enet_spec
+```
+Notice how the main arguments above do not have a value **yet**, because they will be tuned.  
+
+### b. Hyper-parameter tuning  
+Now, let's create a **grid** to perform our hyperparameter tuninig search with multiple combinations of values for penalty and mixture:
+
+```{r enet_grid}
+enet_grid <- crossing(penalty = seq(0, 
+                                    10, 
+                                    by = 1),
+                      mixture = seq(0, 
+                                    1, 
+                                    by = 0.1))
+
+enet_grid
+```
+
+Our grid has **121** potential combinations of mixture and penalty.
+
+```{r}
+
+```
+
+For our grid search, we need:  
+  - Our model specification (`enet_spec`)  
+  - The recipe (`weather_recipe`)  
+  - The grid (`enet_grid`), and    
+  - Our **resampling strategy** (don't have yet)  
+  
+Let's define our resampling strategy below, using a 10-fold cross validation approach:  
+```{r resampling_foldcv}
+resampling_foldcv 
+
+resampling_foldcv
+resampling_foldcv$splits[[1]]
+```
+On each fold, we'll use **437** observations for training and **49** observations to assess performance.    
+
+Now, let's perform the grid search below:  
+```{r enet_grid_result}
+enet_grid_result 
+
+enet_grid_result
+
+```
+
+Why 242 rows?
+121 (each a combination of mixture and penalty) x 2 (2 assessment metrics)  
+
+Let's collect a summary of metrics (across all folds, for each mixture x penalty combination), and plot them.  
+
+Firs, RMSE (lower is better):
+```{r RMSE}
+enet_grid_result %>%
+  ... 
+  filter(.metric == "rmse") %>%
+  ggplot(aes(x = penalty, 
+             y = mean, 
+             color = factor(mixture), 
+             group = factor(mixture))) +
+  geom_line() +
+  geom_point() + 
+  labs(y = "RMSE")
+```
+
+What penalty and mixture values created lowest RMSE?  
+
+Now, let's look into R2 (higher is better):  
+
+```{r R2}
+enet_grid_result %>%
+  collect_metrics() %>%
+  filter(.metric == "rsq") %>%
+  ggplot(aes(x = penalty, 
+             y = mean, 
+             color = factor(mixture), 
+             group = factor(mixture))) +
+  geom_line() +
+  geom_point() + 
+  labs(y = "R2")
+```
+What penalty and mixture values created lowest RMSE?  
+It seems that our best model is with hyperparameters set to:  
+  - mixture = 0  
+  - penalty = 0  
+  
+Let's extract the hyperparameters from the best model as judged by 2 performance metrics:  
+```{r}
+# Based on lowest RMSE
+best_rmse 
+
+best_rmse
+```
+
+```{r}
+# Based on greatest R2
+best_r2 
+
+best_r2
+
+```
+Based on RMSE, we would choose mixture = 0, penalty = 0.
+
+Based on R2, we would choose mixture = 0, penalty = 0.7.
+
+Let's use the hyperparameter values that optimized R2 to fit our final model.
+
+```{r final_spec}
+final_spec 
+
+final_spec
+```
+
+## 3. Validation  
+Now that we determined our best model, let's do our **last fit**.
+
+This means 2 things:  
+  - Traninig the optimum hyperparameter values on the **entire training set**  
+  - Using it to **predict** on the **test set**  
+
+These 2 steps can be completed in one function, as below:  
+
+```{r final_fit}
+final_fit 
+
+final_fit %>%
+  collect_predictions()
+```
+Why 212 observations?  
+
+Metrics on the **test set**:
+```{r}
+
+```
+
+Metrics on **train set** (for curiosity and compare to test set):  
+```{r}
+# RMSE
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rmse(strength_gtex, .pred) %>%
+  bind_rows(
+    
+    
+    # R2
+    final_spec %>%
+      fit(strength_gtex ~ .,
+          data = bake(weather_prep, 
+                      weather_train)) %>%
+      augment(new_data = bake(weather_prep, 
+                              weather_train)) %>% 
+      rsq(strength_gtex, .pred)
+    
+  )
+
+```
+How does metrics on test compare to metrics on train?  
+
+Why?
+
+Predicted vs. observed plot:  
+```{r}
+final_fit %>%
+  ...
+  ggplot(aes(x = ...,
+             y = ...)) +
+  geom_point() +
+  geom_...() +
+  geom_smooth(method = "lm") +
+  scale_x_continuous(limits = c(20, 40)) +
+  scale_y_continuous(limits = c(20, 40)) 
+```
+
+Coefficients:  
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather)) 
+
+```
+
+Variable importance:  
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather)) %>%
+    ... %>%
+  mutate(
+    Importance = abs(Importance),
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable, 
+             fill = Sign)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+    
+```
+
+**Therefore, tmin in September (positive effect), and tmax in September (negative effect) were the most important variables affecting cotton fiber strength.**  
+
+# Summary  
+In this exercise, we covered: 
+  - Penalized linear regression types (ridge, lasso, elastic net)  
+  - Set up a ML workflow to train an elastic net model  
+  - Used `recipes` to process data
+  - Used `rsamples` to split data  
+  - Used a fixed grid to search the best values for mixture and penalty  
+  - Used 5-fold cross validation as the resampling method  
+  - Used both R2 and RMSE as the metrics to select best model  
+  - Once final model was determined, used it to predict **test set**  
+  - Evaluated it with predicted vs. observed plot, R2 and RMSE metrics, and variable importance  
+  
+
