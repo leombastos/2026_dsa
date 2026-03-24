@@ -1,0 +1,499 @@
+---
+title: "Conditional inference tree"
+format: html
+---
+
+# Learning objectives  
+Our learning objectives are to:  
+  - Understand conditional inference tree (cit) algorithm 
+  - Use the ML framework to:  
+    - pre-process data
+    - train a cit model 
+    - evaluate model predictability 
+  - Explore a few new concepts:  
+    - Iterative search with **simulated annealing**  
+    - Selecting **best model within 1 sd**  
+    
+
+# Introduction  
+As we previously learned, linear regression models can suffer from **multicollinearity** when two or more predictor variables are highly correlated.  
+
+The methods we mentioned to overcome multicollinearity include:  
+  - Dimensionality reduction (e.g., PCA)  
+  - Variable selection:
+    - by hand
+    - by models  
+
+Today, we'll explore another model that performs variable selection, but in a different way: **conditional inference trees (CIT)**.  
+
+## CIT 
+Conditional inference tree is a recursive model that works iteratively performing 2 steps:  
+  - **variable selection**  
+  - **binary split**  
+  
+It performs **variable selection** by first running all possible bivariate models between the response variable (e.g., strength_gtex) and each individual explanatory variable (e.g., sum_precip.mm_June), in the form of **strength_gtex ~ sum_precip.mm_June**. Then, it selects the explanatory variable with the **lowest p-value** as the most important.  
+
+After it selects the most important variable, it performs a **binary split** on that variable, which involves finding a value of the explanatory variable which, if used to split the data in 2 groups, will minimize the error of the two splits.  
+
+After making the first split, it performs a new iteration on each of the splits, performing again variable selection and binary split.  
+
+The tree stops growing (stops iterating) when it reaches a given stopping criteria, as for example, maximum tree depth.    
+
+Let's look into how it works, with figures.  
+
+![](https://ars.els-cdn.com/content/image/1-s2.0-S0378429021002331-gr5.jpg)
+Terminology:  
+  - **Root node**: node on top, with all observations (Rain_Cum)    
+  - **Internal node**: all intermediate nodes (e.g., Flag_Leaf_Fungi)    
+  - **Leaf/terminal node**: the bottom nodes with the boxplots  
+  
+Variables selected first (on top) are more important than variables selected afterwards. In this example, the most important variable in explaining grain yield is **Rain_Cum**.  
+
+## Creating partitions  
+Let's look into a simpler example where we are predicting y as a function of x.  
+
+A simple CIT model from this relationship would be with a single break:  
+![](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/decision-stump-1.png)
+
+If we make a plot of y ~ x and show the split above along the x axis, this is how it would look like:  
+
+![](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/decision-stump-2.png)
+
+We can build a more complex tree by allowing it to be deeper:  
+![](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/depth-3-decision-tree-1.png)
+
+Which will translate into more breaks along the x-axis of the scatterplot:  
+
+![](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/depth-3-decision-tree-2.png)
+
+We can allow it to be VERY complex:  
+![](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/deep-overfit-tree-1.png)
+
+With the following scatterplot breakpoints:  
+![](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/deep-overfit-tree-2.png)
+
+So, how can we control the simplicity/complexity of the tree?  
+
+**Training a model by fine-tuning its hyper-parameters**.
+
+There will be 2 main hyperparameters that we will fine-tune:  
+  - **maximum depth**: maximum (vertical) depth of the tree
+  - **minimum criterion**:  the value of (1 - p-value) that must be exceeded in order to implement a split
+     
+## Pros vs. cons of CIT  
+Pros:  
+  - Non-parametric  
+  - It can model non-linear relationships  
+  - The model created is a decision tree, very easy to interpret  
+  - Can be used with both numerical and categorical response variables  
+  
+Cons:  
+  - Can have higher bias  
+  - Potentially lower predictive power: any observation matching a given condition will be predicted as the mean of the terminal node.    
+  
+    
+# Setup  
+```{r}
+#| message: false
+#| warning: false
+
+#install.packages("partykit")
+#install.packages("finetune")
+#install.packages("bonsai")
+
+library(tidymodels)
+library(tidyverse)
+library(vip)
+library(partykit)
+library(finetune)
+library(bonsai)
+```
+
+```{r weather}
+weather <- read_csv("../data/weather_monthsum.csv")
+
+weather
+```
+
+# ML workflow  
+We're going to use the same workflow as we used for elastic net.   
+
+## 1. Pre-processing  
+Here's where we perform **data split** and **data processing**.  
+
+### a. Data split  
+For data split, let's use **70% training / 30% testing**.
+
+```{r weather_split}
+# Setting seed to get reproducible results  
+set.seed(931735)
+
+# Setting split level  
+weather_split <- initial_split(weather, 
+                               prop = .7,
+                               strata = strength_gtex)
+
+weather_split
+```
+
+
+```{r weather_train}
+# Setting train set 
+weather_train <- training(weather_split)
+
+weather_train
+```
+How many observations?
+
+```{r weather_test}
+# Setting test split
+weather_test <- testing(weather_split)
+
+weather_test
+```
+How many observations?  
+
+Let's check the distribution of our predicted variable **strength_gtex** across training and testing: 
+```{r distribution}
+ggplot() +
+  geom_density(data = weather_train, 
+               aes(x = strength_gtex),
+               color = "red") +
+  geom_density(data = weather_test, 
+               aes(x = strength_gtex),
+               color = "blue") 
+  
+```
+
+Now, we put our **test set** aside and continue with our **train set** for training.  
+
+  
+### b. Data processing  
+Before training, we may need to perform some processing steps, like  
+  - normalizing    
+  - **removing unimportant variables**  
+  - dropping NAs  
+  - performing PCA on the go  
+  - removing columns with single value  
+  - others?  
+
+For that, we'll create a **recipe** of these processing steps. 
+
+This recipe will then be applied now to the **train data**, and easily applied to the **test data** when we bring it back at the end.
+
+Creating a recipe is as easy way to port your processing steps for other data sets without needing to repeat code, and also only considering the data it is being applied to.  
+
+You can find all available recipe step options here: https://tidymodels.github.io/recipes/reference/index.html
+
+Different model types require different processing steps.  
+Let's check what steps are required for an elastic net model (linear_reg).
+We can search for that in this link: https://www.tmwr.org/pre-proc-table  
+
+> Differently from elastic net, variables do not need to be normalized in conditional inference tree, so we'll skip this step  
+
+```{r weather_recipe}
+weather_recipe <-
+  # Defining predicted and predictor variables
+  recipe(strength_gtex ~ .,
+         data = weather_train) %>%
+  # Removing year and site  
+    step_rm(year, site, matches("Jan|Feb|Mar|Apr|Nov|Dec")) #%>%
+  # Normalizing all numeric variables except predicted variable
+  #step_normalize(all_numeric(), -all_outcomes())
+
+weather_recipe
+```
+
+Now that we have our recipe ready, we **need to apply it** to the training data in a process called prepping:
+
+```{r weather_prep}
+weather_prep <- weather_recipe %>%
+  prep()
+
+weather_prep
+```
+
+
+Now, we're ready to start the model training process!
+
+## 2. Training  
+### a. Model specification  
+First, let's specify:  
+  - the **type of model** we want to train  
+  - which **engine** we want to use  
+  - which **mode** we want to use  
+
+> Elastic nets can only be run for a numerical response variable. CITs can be run with either numerical (regression) or categorical (classification) explanatory variable. Therefore, we have the need to specify the mode here.
+
+Conditional inference tree **hyperparameters**:  
+  - **tree_depth**: maximum depth of the tree    
+  - **mincriterion**: the value of 1 - p-value that must be exceeded in order to implement a split  
+    - **min_n**: minimum number of data points in a node that are required for the node to be split further  
+
+Let's create a model specification that will **fine-tune** the first two for us.
+
+A given model type can be fit with different engines (e.g., through different packages). Here, we'll use the **partykit** engine/package.  
+  
+```{r cit_spec}
+cit_spec  
+  # Specifying cit as our model type, asking to tune the hyperparameters
+
+    # Specify the engine
+
+    # Specifying mode  
+
+cit_spec
+```
+
+Notice how the main arguments above do not have a value **yet**, because they will be tuned.  
+
+> Notice how we have one hyperparameter at the level of decision tree (tree_depth) and another one at the level of the engine (min_criterion).  
+
+### b. Hyper-parameter tuning  
+> On our previous exercise, we used a fixed grid search approach. This time, let's use an iterative search approach.
+
+For our iterative search, we need:  
+  - Our model specification (`cit_spec`)  
+  - The recipe (`weather_recipe`)  
+  - Our **resampling strategy** (don't have yet)  
+  - **Parameter information** (don't have yet)      
+  
+Let's define our resampling strategy below, using a 10-fold cross validation approach:  
+```{r resampling_foldcv}
+set.seed(34549)
+resampling_foldcv <- vfold_cv(weather_train, 
+                              v = 10)
+
+resampling_foldcv
+resampling_foldcv$splits[[1]]
+resampling_foldcv$splits[[2]]
+```
+On each fold, we'll use **438** observations for training and **49** observations to assess performance.    
+
+Now, let's define our parameter information.  
+
+We need to create this object because engine-specific hyperparameters have a missing object, and it is required to be not missing to perform simulated annealing.  
+
+```{r cit_param}
+cit_param 
+
+```
+
+Now, let's perform the search below.  
+
+We will use an iterative search algorithm called **simulated annealing**.  
+
+Here's how it works:  
+![](https://www.tmwr.org/figures/iterative-neighborhood-1.png)
+  - In the example above, mixture and penalty from an elastic net model are being tuned.  
+
+  - It finds a candidate value of hyperparameters and their associated rmse to start (iteration 1).  
+
+  - It establishes a radius around the first proposal, and randomly chooses a new set of values within that radius.  
+  
+  - If this achieves better results than the previous parameters, it is accepted as the new best and the process continues. If the results are worse than the previous value the search procedure may still use this parameter to define further steps. 
+  
+  - After a given number of iterations, the algorithm stops and provides a list of the best models and their hyperparameters.  
+
+In the algorithm below, we are asking for 50 iterations.  
+
+```{r cit_grid_result}
+set.seed(76544)
+cit_grid_result 
+
+```
+Notice how we have a column for iterations.  
+The first iteration uses a sensible value for the hyper-parameters, and then starts "walking" the parameter space in the direction of greatest improvement.  
+
+Let's collect a summary of metrics (across all folds, for each iteration), and plot them.  
+
+Firs, RMSE (lower is better):
+```{r RMSE}
+cit_grid_result %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  ggplot(aes(x = conditional_min_criterion, 
+             y = tree_depth 
+             )) +
+  geom_path(group = 1) +
+  geom_point(aes(color = factor(mean)),
+             size = 3) + 
+  scale_color_viridis_d() +
+  scale_y_continuous(breaks = seq(1,15,2)) +
+  geom_text(aes(label = .iter), nudge_x = .0005) +
+  labs(title = "RMSE")
+```
+
+What tree_depth and min criterion values created lowest RMSE?  
+
+Now, let's look into R2 (higher is better):  
+
+```{r R2}
+cit_grid_result %>%
+  collect_metrics() %>%
+  filter(.metric == "rsq") %>%
+  ggplot(aes(x = conditional_min_criterion, 
+             y = tree_depth 
+             )) +
+  geom_path(group = 1) +
+  geom_point(aes(color = factor(mean)),
+             size = 3) + 
+  scale_color_viridis_d() +
+  scale_y_continuous(breaks = seq(1,15,2)) +
+  geom_text(aes(label = .iter), nudge_x = .0005) +
+  labs(title = "R2")
+
+```
+
+> Previously, we selected the single best model. Now, let's select the best model within one std error of the metric, so we choose a model among the top ones that is more parsimonious.  
+
+```{r}
+# Based on lowest RMSE
+best_rmse <- cit_grid_result 
+
+best_rmse
+
+```
+
+```{r}
+# Based on greatest R2
+best_r2 <- cit_grid_result 
+
+best_r2
+
+```
+Based on RMSE, we would choose   
+  - tree_depth = 10   
+  - conditional_min_criterion = 0.9926512
+
+Based on R2, we would choose   
+  - tree_depth = 10
+  - conditional_min_criterion = 0.9926512
+
+Let's use the hyperparameter values that optimized R2 to fit our final model.
+
+```{r final_spec}
+final_spec <- decision_tree(tree_depth = best_r2$tree_depth) %>%
+  # Specify the engine
+  set_engine("partykit",
+             conditional_min_criterion = best_r2$conditional_min_criterion) %>%
+  # Specifying mode  
+  set_mode("regression")
+  
+
+final_spec
+```
+
+## 3. Validation  
+Now that we determined our best model, let's do our **last fit**.
+
+This means 2 things:  
+  - Traninig the optimum hyperparameter values on the **entire training set**  
+  - Using it to **predict** on the **test set**  
+
+These 2 steps can be completed in one function, as below:  
+
+```{r final_fit}
+final_fit <- last_fit(final_spec,
+                weather_recipe,
+                split = weather_split)
+
+final_fit %>%
+  collect_predictions()
+```
+
+Metrics on the **test set**:
+```{r}
+final_fit %>%
+  collect_metrics()
+```
+
+Metrics on **train set** (for curiosity and compare to test set):  
+```{r}
+# RMSE
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rmse(strength_gtex, .pred) %>%
+  bind_rows(
+    
+    
+    # R2
+    final_spec %>%
+      fit(strength_gtex ~ .,
+          data = bake(weather_prep, 
+                      weather_train)) %>%
+      augment(new_data = bake(weather_prep, 
+                              weather_train)) %>% 
+      rsq(strength_gtex, .pred)
+    
+  )
+
+```
+How does metrics on test compare to metrics on train?  
+
+Predicted vs. observed plot:  
+```{r}
+final_fit %>%
+  collect_predictions() %>%
+  ggplot(aes(x = strength_gtex,
+             y = .pred)) +
+  geom_point() +
+  geom_abline() +
+  geom_smooth(method = "lm") +
+  scale_x_continuous(limits = c(20, 40)) +
+  scale_y_continuous(limits = c(20, 40)) 
+```
+Why the 4 horizontal lines?  
+
+How can we get more horizontal lines in this type of algorithm?  
+
+Variable importance:  
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather)) %>%
+    vi() %>%
+  mutate(
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+    
+```
+Tree:  
+
+```{r}
+
+  
+```
+
+**Therefore, solar radiation in July and vapor pressure in June were the most important variables affecting cotton fiber strength.**  
+
+Greater fiber strength was observed when solar radiation in July was < 398 W/m2 and vapor pressure in June was > 2130 Pa (terminal node 4).    
+
+For a nicer tree visualization, check out the package **ggparty**:  
+
+  - https://github.com/martin-borkovec/ggparty  
+  - https://jtr13.github.io/cc19/introduction-to-package-ggparty.html  
+  
+# Summary  
+In this exercise, we covered: 
+  - Conditional inference tree algorithm    
+  - Set up a ML workflow to train an cit model  
+  - Used `recipes` to process data
+  - Used `rsamples` to split data  
+  - Used **iterative search** to find the best values for mas_depth and min_criterion    
+  - Used 10-fold cross validation as the resampling method  
+  - Used both R2 and RMSE as the metrics to select best model  
+  - Once final model was determined, used it to predict **test set**  
+  - Evaluated it with predicted vs. observed plot, R2 and RMSE metrics, variable importance, and tree plot    
+  
+
