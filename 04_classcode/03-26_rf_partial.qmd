@@ -1,0 +1,515 @@
+---
+title: "Random forest"
+format: html
+---
+
+# Learning objectives  
+Our learning objectives are to:  
+  - Understand random forest algorithm 
+  - Use the ML framework to:  
+    - pre-process data
+    - train a random forest model 
+    - evaluate model predictability 
+  - Explore a few new concepts:  
+    - Selecting **best model within one pct loss**  
+    
+
+# Introduction  
+As we previously learned, linear regression models can suffer from **multicollinearity** when two or more predictor variables are highly correlated.  
+
+The methods we mentioned to overcome multicollinearity include:  
+  - Dimensionality reduction (e.g., PCA)  
+  - Variable selection:
+    - by hand
+    - by models  
+
+Today, we'll explore another model that addresses multicolinearity: **random forest**.  
+
+## Random forest 
+Random forest is a very popular **supervised** “out-of-the-box” or “off-the-shelf” learning algorithm that has good predictive performance with relatively little hyperparameter tuning.  
+
+The power of random forests come from **two random processes**:  
+  - Bootstrap aggregating (bagging) on rows  
+  - Random selection of a subset of variables (columns) at each split.  
+  
+## Bootstrap aggregating (bagging)  
+Bagging trees introduces a random component into the tree building process by building **many trees on bootstrapped copies of the training data**.   
+
+Bagging then aggregates the predictions across all the trees; this aggregation reduces the variance of the overall procedure and results in improved predictive performance.
+
+## Random subset of features  
+While growing a decision tree during the bagging process, random forests perform split-variable randomization where each time a split is to be performed, the search for the split variable is limited to a random subset of **mtry** of the original **p** features. 
+
+Typical default values for mtry are **p/3** for regression (our case) and $\sqrt p$ for classification.  
+
+Since the algorithm **randomly selects** a **bootstrap sample** to train on and a **random sample of features to use at each split**, a more diverse set of trees is produced which tends to lessen tree correlation beyond bagged trees and often dramatically increase predictive power.  
+
+
+So, how can we control the simplicity/complexity of the tree?  
+
+**Training a model by fine-tuning its hyper-parameters**.
+
+There will be 3 main hyperparameters that we can fine-tune:  
+  - **number of trees in the forest**: as the name says, how many individual trees will be trained  
+  - **number of features randomly selected at each split (mtry)**: as the name says  
+  - **minimum node size**:  minimum number of observations in a node for it to be split.  
+  
+## Number of trees  
+The number of trees needs to be sufficiently large to stabilize the error rate. A good rule of thumb is to start with 10 times the number of features.   
+
+![](https://bradleyboehmke.github.io/HOML/09-random-forest_files/figure-html/tuning-trees-1.png)
+     
+More trees provide more robust and stable error estimates and variable importance measures; however, the **impact on computation time increases linearly with the number of trees**.  
+     
+     
+## mtry  
+mtry helps to balance low tree correlation with reasonable predictive strength.  
+
+When there are **fewer relevant predictors** (e.g., noisy data) a **higher value of mtry** tends to perform better because it makes it more likely to select those features with the strongest signal.   
+
+When there are many relevant predictors, a lower mtry might perform better.
+
+![](https://bradleyboehmke.github.io/HOML/09-random-forest_files/figure-html/tuning-mtry-1.png)
+
+## Node size  
+Node size refers to the minimum number of observations in a node (of a given tree) for it to be split.  
+
+Larger values of node size grow simpler individual trees, while smaller values of node size grow longer more complex trees.  
+
+If computation time is a concern then you can often decrease run time substantially by increasing the node size and have only marginal impacts to your error estimate.  
+
+![](https://bradleyboehmke.github.io/HOML/09-random-forest_files/figure-html/tuning-node-size-1.png)
+
+## Growing an individual tree  
+Random forest is a collection of many individual trees.  
+
+Each individual tree will grow based on node size, the bootstrapped sample, and evaluating a given number of random columns at each split.  
+
+On each split, the selected variable and its binary split are chosen by evaluating many random splits for each of the randomly selected variables at that node, and choosing the variable and split that minimizes error.  
+
+![](https://cimentadaj.github.io/ml_socsci/03_trees_files/figure-html/unnamed-chunk-46-1.png)
+
+The example above is the random splits being evaluated for one variable at that node.  
+
+This process happens for all variables considered at that node, and the best combination is chosen to perform the split.  
+
+## From trees to a forest  
+Random forest is an ensemble of many trees. 
+
+Each individual tree is made up from:  
+  - a bootstrapped sample of the rows  
+  - at each split, a random sample of the columns  
+
+Then the forest grows by growing many individual trees.  
+When predicting, each tree makes its own prediction.  
+
+The prediction from all trees is aggregated (averaged if regression) and the random forest provides one single predicted value.  
+
+## Pros vs. cons of RF  
+Pros:  
+  - Good performance even without tuning  
+  - Simple to train  
+  - It can model non-linear relationships  
+  - Can be used with both numerical and categorical response variables  
+  - It handles NAs  
+  - Offers great balance of variance (by growing many trees) and bias (by averaging over them)  
+  
+Cons:  
+  - Not as interpretable as previous models (there is no single tree model to look at)     
+  
+    
+# Setup  
+```{r}
+#| message: false
+#| warning: false
+
+#install.packages("ranger")
+
+library(tidymodels)
+library(tidyverse)
+library(vip)
+library(ranger)
+library(finetune)
+```
+
+```{r weather}
+weather <- read_csv("../data/weather_monthsum.csv")
+
+weather
+```
+
+# ML workflow  
+We're going to use the same workflow as we used for elastic net.   
+
+## 1. Pre-processing  
+Here's where we perform **data split** and **data processing**.  
+
+### a. Data split  
+For data split, let's use **70% training / 30% testing**.
+
+```{r weather_split}
+# Setting seed to get reproducible results  
+set.seed(931735)
+
+# Setting split level  
+weather_split <- initial_split(weather, 
+                               prop = .7,
+                               strata = strength_gtex)
+
+weather_split
+```
+
+
+```{r weather_train}
+# Setting train set 
+weather_train <- training(weather_split)
+
+weather_train
+```
+How many observations?
+
+```{r weather_test}
+# Setting test split
+weather_test <- testing(weather_split)
+
+weather_test
+```
+How many observations?  
+
+Let's check the distribution of our predicted variable **strength_gtex** across training and testing: 
+```{r distribution}
+ggplot() +
+  geom_density(data = weather_train, 
+               aes(x = strength_gtex),
+               color = "red") +
+  geom_density(data = weather_test, 
+               aes(x = strength_gtex),
+               color = "blue") 
+  
+```
+
+Now, we put our **test set** aside and continue with our **train set** for training.  
+
+  
+### b. Data processing  
+Before training, we need to perform some processing steps, like  
+  - normalizing  
+  - **removing unimportant variables**  
+  - dropping NAs  
+  - performing PCA on the go  
+  - removing columns with single value  
+  - others?  
+
+For that, we'll create a **recipe** of these processing steps. 
+
+This recipe will then be applied now to the **train data**, and easily applied to the **test data** when we bring it back at the end.
+
+Creating a recipe is an easy way to port your processing steps for other data sets without needing to repeat code, and also only considering the data it is being applied to.  
+
+You can find all available recipe step options here: https://tidymodels.github.io/recipes/reference/index.html
+
+Different model types require different processing steps.  
+Let's check what steps are required for an elastic net model (linear_reg).
+We can search for that in this link: https://www.tmwr.org/pre-proc-table  
+
+> Differently from elastic net, variables do not need to be normalized in random forest, so we'll skip this step.   
+
+```{r weather_recipe}
+weather_recipe <-
+  # Defining predicted and predictor variables
+  recipe(strength_gtex ~ .,
+         data = weather_train) %>%
+  # Removing year and site  
+    step_rm(year, site, matches("Jan|Feb|Mar|Apr|Nov|Dec")) #%>%
+  # Normalizing all numeric variables except predicted variable
+  #step_normalize(all_numeric(), -all_outcomes())
+
+weather_recipe
+```
+
+Now that we have our recipe ready, we **need to apply it** to the training data in a process called prepping:
+
+```{r weather_prep}
+weather_prep <- weather_recipe %>%
+  prep()
+
+weather_prep
+```
+
+
+Now, we're ready to start the model training process!
+
+## 2. Training  
+### a. Model specification  
+First, let's specify:  
+  - the **type of model** we want to train  
+  - which **engine** we want to use  
+  - which **mode** we want to use  
+
+> Elastic nets can only be run for a numerical response variable. Random forests can be run with either numerical (regression) or categorical (classification) explanatory variable. Therefore, we have the need to specify the mode here.
+
+Random forest **hyperparameters**:  
+  - **trees**: number of trees in the forest    
+  - **mtry**: number of random features sampled at each node split    
+    - **min_n**: minimum number of data points in a node that are required for the node to be split further  
+
+Let's create a model specification that will **fine-tune** the first two for us.
+
+A given model type can be fit with different engines (e.g., through different packages). Here, we'll use the **ranger** engine/package.  
+  
+```{r rf_spec}
+rf_spec <- 
+  # Specifying rf as our model type, asking to tune the hyperparameters
+
+    # Specify the engine
+
+    # Specifying mode  
+
+rf_spec
+```
+
+Notice how the main arguments above do not have a value **yet**, because they will be tuned.  
+
+### b. Hyper-parameter tuning  
+For our iterative search, we need:  
+  - Our model specification (`rf_spec`)  
+  - The recipe (`weather_recipe`)  
+  - Our **resampling strategy** (don't have yet)  
+
+> Notice that for rf we do not need to specify the parameter information, as we needed for CIT. The reason is that for rf, all hyperparameters to be tuned are specified at the model level, whereas for CIT one was at model level and one was at the engine level. Engine level hyperparameters need to be "finalized" and have their range of values set up before they can be used in search methods.  
+
+> We used 10-fold CV before. It took about 10-min to run the grid on my side, so to avoid a long wait time in class, let's switch to 5-fold CV this time around.
+
+Let's define our resampling strategy below, using a 5-fold cross validation approach:  
+```{r resampling_foldcv}
+set.seed(34549)
+resampling_foldcv <- vfold_cv(weather_train, 
+                              v = 5)
+
+resampling_foldcv
+resampling_foldcv$splits[[1]]
+resampling_foldcv$splits[[2]]
+```
+On each fold, we'll use **389** observations for training and **98** observations to assess performance.    
+
+Now, let's perform the search below.  
+
+We will use an iterative search algorithm called **simulated annealing**.  
+
+Here's how it works:  
+![](https://www.tmwr.org/figures/iterative-neighborhood-1.png)
+  - In the example above, mixture and penalty from an elastic net model are being tuned.  
+
+  - It finds a candidate value of hyperparameters and their associated rmse to start (iteration 1).  
+
+  - It establishes a radius around the first proposal, and randomly chooses a new set of values within that radius.  
+  
+  - If this achieves better results than the previous parameters, it is accepted as the new best and the process continues. If the results are worse than the previous value the search procedure may still use this parameter to define further steps. 
+  
+  - After a given number of iterations, the algorithm stops and provides a list of the best models and their hyperparameters.  
+
+In the algorithm below, we are asking for 50 iterations.  
+
+```{r rf_grid_result}
+set.seed(76544)
+rf_grid_result <- tune_sim_anneal(object = rf_spec,
+                     preprocessor = weather_recipe,
+                     resamples = resampling_foldcv,
+                    #param_info = rf_param,
+                    iter = 50
+                     )
+
+beepr::beep()
+
+rf_grid_result
+rf_grid_result$.metrics[[2]]
+```
+Notice how we have a column for iterations.  
+The first iteration uses a sensible value for the hyper-parameters, and then starts "walking" the parameter space in the direction of greatest improvement.  
+
+Let's collect a summary of metrics (across all folds, for each iteration), and plot them.  
+
+Firs, RMSE (lower is better):
+```{r RMSE}
+rf_grid_result %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  ggplot(aes(x = mtry, 
+             y = trees 
+             )) +
+  geom_path(group = 1) +
+  geom_point(aes(color = mean),
+             size = 3) + 
+  scale_color_viridis_b() +
+  geom_text(aes(label = .iter), nudge_x = .0005) +
+  labs(title = "RMSE")
+```
+
+What tree_depth and min criterion values created lowest RMSE?  
+
+Now, let's look into R2 (higher is better):  
+
+```{r R2}
+rf_grid_result %>%
+  collect_metrics() %>%
+  filter(.metric == "rsq") %>%
+  ggplot(aes(x = mtry, 
+             y = trees 
+             )) +
+  geom_path(group = 1) +
+  geom_point(aes(color = mean),
+             size = 3) + 
+  scale_color_viridis_b() +
+  geom_text(aes(label = .iter), nudge_x = .0005) +
+  labs(title = "R2")
+
+```
+
+> Previously, we selected the single best model. Now, let's select the best model within one std error of the metric, so we choose a model among the top ones that is more parsimonious.  
+
+```{r}
+# Based on lowest RMSE
+best_rmse <- rf_grid_result 
+
+best_rmse
+
+```
+
+```{r}
+# Based on greatest R2
+best_r2 <- rf_grid_result 
+
+
+best_r2
+
+```
+Based on RMSE, we would choose   
+  - mtry = 24 
+  - trees = 518
+
+Based on R2, we would choose   
+  - mtry = 25
+  - trees = 273
+
+Let's use the hyperparameter values that optimized R2 to fit our final model.
+
+```{r final_spec}
+final_spec <- rand_forest(trees = best_r2$trees,
+                          mtry = best_r2$mtry) %>%
+  # Specify the engine
+
+    # Specifying mode  
+  set_mode("regression")
+  
+
+final_spec
+```
+
+## 3. Validation  
+Now that we determined our best model, let's do our **last fit**.
+
+This means 2 things:  
+  - Traninig the optimum hyperparameter values on the **entire training set**  
+  - Using it to **predict** on the **test set**  
+
+These 2 steps can be completed in one function, as below:  
+
+```{r final_fit}
+final_fit <- last_fit(final_spec,
+                weather_recipe,
+                split = weather_split)
+
+final_fit %>%
+  collect_predictions()
+```
+
+Metrics on the **test set**:
+```{r}
+final_fit %>%
+  collect_metrics()
+```
+
+Metrics on **train set** (for curiosity and compare to test set):  
+```{r}
+# RMSE
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rmse(strength_gtex, .pred) %>%
+  bind_rows(
+    
+    
+    # R2
+    final_spec %>%
+      fit(strength_gtex ~ .,
+          data = bake(weather_prep, 
+                      weather_train)) %>%
+      augment(new_data = bake(weather_prep, 
+                              weather_train)) %>% 
+      rsq(strength_gtex, .pred)
+    
+  )
+
+```
+How does metrics on test compare to metrics on train?  
+
+Predicted vs. observed plot:  
+```{r}
+final_fit %>%
+  collect_predictions() %>%
+  ggplot(aes(x = strength_gtex,
+             y = .pred)) +
+  geom_point() +
+  geom_abline() +
+  geom_smooth(method = "lm") +
+  scale_x_continuous(limits = c(20, 40)) +
+  scale_y_continuous(limits = c(20, 40)) 
+```
+
+Variable importance: 
+
+The importance metric we are evaluating here is **permutation**. 
+
+In the permutation-based approach, for each tree, the out- of-bag sample is passed down the tree and the prediction accuracy is recorded.   
+
+Then the values for each variable (one at a time) are randomly permuted and the accuracy is again computed.   
+
+The decrease in accuracy as a result of this randomly shuffling of feature values is averaged over all the trees for each predictor.   
+
+The variables with the **largest average decrease in accuracy** are considered **most important**.  
+
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather)) %>%
+    vi() %>%
+  mutate(
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+    
+```
+
+**Therefore, solar radiation in July and August, and minimum temperature in June were the most important variables affecting cotton fiber strength.**  
+
+# Summary  
+In this exercise, we covered: 
+  - Random forest algorithm    
+  - Set up a ML workflow to train an rf model  
+  - Used `recipes` to process data
+  - Used `rsamples` to split data  
+  - Used **iterative search** to find the best values for mas_depth and min_criterion    
+  - Used 5-fold cross validation as the resampling method  
+  - Used both R2 and RMSE as the metrics to select best model  
+  - Once final model was determined, used it to predict **test set**  
+  - Evaluated it with predicted vs. observed plot, R2 and RMSE metrics, variable importance, and tree plot    
+
+
