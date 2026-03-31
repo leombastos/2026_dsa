@@ -1,0 +1,142 @@
+---
+title: "Data Science Applied to Ag - Final Project - ML"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    theme: cerulean
+author: FIRST LAST
+---
+
+# A. Introduction  
+This file contains the **instructions** for the final project.  
+
+To get you setup, you will need to:  
+
+  - Student #1: create a repository on your GitHub account. You can call this repository "2026dsa_finalproject_groupX", **where X is the number of your group**. Make it public, add a README, add a .gitignore for R.  
+  - Student #1: follow the steps we did in class to start a new RStudio project with version control.  
+  - Student #1: in your computer, create the sub-folders code, data, output, and move your data set into the `data` folder. Also, student 1 moves this current script into the `code` folder. Do a git stage, commit, push.  
+  - Student #1: on GitHub, go the repository settings and invite your partner to be a collaborator in the repository. That will give them push permission.  
+  - Now, both students should clone this repository on their computers like we did in class. Make sure this step works well and that you can pull and push from GitHub.  
+  - Student 2, after cloning, does a git pull to get all these updates on their computer.  
+  - Student 1 and 2 work together to update the README file. README files should explain what the repository is about, the goals of that project, who is working in it, and any other important details you may find.  
+
+# B. Defining the problem  
+
+You are being provided with a **corn variety trial** data set.  
+This data contains over **164,000 rows** spanning **10 years** (2014-2023), **45 sites** across the USA, for a total of **270** site-years, where over **5,000** corn hybrids were evaluated.  
+
+You are being provided with the following **training data** for years 2014-2023:   
+
+  - Trait information (including site, year, hybrid, yield, and grain moisture)  
+  - Meta information (including site, year, previous crop, longitude, and latitude)  
+  - Soil information (including site, year, soil pH, soil organic matter, soil P, soil K)  
+
+You are also being provided with the following **testing data** for year 2024:  
+  - Submission information (site, year, hybrid, **no yield**)  
+  - Meta information (same as training)  
+  - Soil information (same as training)  
+
+> You are tasked in training machine learning models using the training data to predict yield on the test data.  
+
+One difference from class is that **you are not provided with the test data yield (predicted variable)**, only the predictor variables.  
+Therefore, using the training data wisely to create predictive models will be important.  
+
+
+# C. Open-source data  
+Notice you were provided with the **longitude and latitude** of most of the site-years.  
+You are encouraged to use this information to pull any external open-source data sets like **weather**, or anything else you may find useful.  
+
+This will be up to each team.
+Part of creating a great model is incorporating different pieces of information.  
+
+# D. Feature engineering  
+Your goal is to create good predictor variables in your data set for modelling.  
+
+It is up to each team how you will perform feature engineering.  
+For ex. in class we summarized weather on a monthly basis, but perhaps this is not the best approach.  
+
+
+# E. Modeling strategies  
+You are asked to fully train two different machine learning models:  
+  - XGboost (everyone)  
+  - **One more model of your choice not used in class**.  
+
+You can find a list of all tydymodels supported models here:  
+https://www.tidymodels.org/find/parsnip/  
+
+# F. Training strategies  
+For both XGboost and your model of choice, the entire training process is up to you.  
+That means you decide things like  
+  - Data split proportions  
+  - Pre-processing steps  
+  - Hyper-parameters to fine tune  
+  - Search strategy  
+  - Resampling strategy  
+  - Which metric to use to select best model  
+  - Which type of model selection to use (e.g., best model, best within 1 sd, etc.)  
+  
+# G. Communicating your results  
+You will be required to create a **shiny app** to communicate your results.  
+Select one of your final models (XGboost or the other one), and display its results in the app.
+While the shiny app design is up to you, it should contain:  
+  - At least one EDA on yield based on the training data  
+  - EDA on at least 1 predictor variable of each group (soil, weather)  
+  - At least one interactive component  
+  - A plot showing the most important variables in your model  
+  - A plot for predicted vs observed with R2 and RMSE on your testing set (not the one I provide)  
+
+# H. Troubleshooting  
+You will for sure run into code issues.  
+This is common and expected, and part of the learning process.  
+
+While this is an individual project, I do encourage all students to help each other, especially as you will likely run into similar problems.  
+
+For that to work, we will be using **GitHub** to ask and answer questions.  
+
+ALL QUESTIONS should be asked in our course GitHub page (https://github.com/leombastos/2026_dsa) under "Issues". **Please do not use email for asking questions**.
+
+Make sure to **"Watch"** the repository so you get notified when someone posts on Issues.  
+
+> I anticipate all of you will have multiple questions. The goal with using GitHub is that you can help each other. You will be graded for participation both in asking questions on GitHub and also helping others with their questions.  
+
+With that, when you have issues running code, here are a few resources you can use, in chronological order:  
+
+- **Yourself**: Read the error message, see if you can interpret it and understand what is going on. A message like "Error: object yield could not be found" is self-explanatory.    
+- **Google**: Sometimes just copying an error message and pasting on Google can help you find posts with the answer.  
+- **Peers**: ask your classmates using GitHub.  
+- **Me**: after you have gone through all the sources above without success, I will certainly be glad to assist you. I want to be the last resource you use because that's how it will be after our class is finished: I will be available to assist you in anything R-related in your career, but you will also need to attempt solving them before you reach out.  
+
+# I. Turning it in  
+You are required to turn in the following:  
+  - The github repository URL containing ALL the code for the ML training process  
+  - The completed `testing_submission` file with your predictions for the test data that I shared with you. **NOTE: only fill in the NA cells, DO NOT CHANGE anything else! If you send this file with different column names, etc, you WILL LOSE POINTS!**  
+  - The URL for the published shiny app  
+  - A powerpoint slide named "2026dsa_teamX.ppt" where X is the number of your team. The deck should contain a single slide showing 
+  
+Submit the github URL, the `testing_submisison` csv, and the shiny app URL by **April 30th** 11:59 pm on the following link:  
+https://forms.gle/Es34gk74DHBBSEoa8 
+  
+# J. Grading  
+You will be graded based on:  
+  - following general workflows we did in class for all steps (open-source data retrieval and processing, feature engineering, ML model training, etc.)  
+  - following reproducible standards like sensible folder and file naming, script organization, script comments, etc.  
+  - collaborating with your partner in GitHub  
+  - submitting all three pieces of information (2 URLs, 2 files)  
+  - submitting on time  
+  - having a shiny dashboard with the minimum requirements listed above  
+
+# K. Team work in GitHub  
+Whether you are working with your future-self or as duos, make sure to stage, commit, and push after finishing each of the sub-sections above. When committing, write commit messages that are short and descriptive (e.g., finished wrangling).  
+
+If you are working in duos, make sure to split the workload. I will check your collaborative work through the commit history, and if one student has contributed significantly more than the other, than that will impact grades.  
+
+**Tip 1**: to avoid merge conflicts, make sure to **pull** first, and then start working locally. That will ensure that any changes made by your partner will be "downloaded" before you make changes to the files locally.  
+
+**Tip 2**: make use of the Issues on this repository to set up to-do lists and assign tasks to different people. You can also use each issue/task to discuss how things should be run and get to an agreement.  
+
+# L. Extra  
+Once each team submits their predictions on my test set, I will compare their predictions with the observed values (that you don't have).  
+
+The team that gets the highest **R2** or lowest **RMSE** will receive an award and bragging rights.  
+
