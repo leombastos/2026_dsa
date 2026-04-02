@@ -1,0 +1,675 @@
+---
+title: "XGBoost"
+format: html
+editor: visual
+---
+
+# Learning Objectives
+
+Our learning objectives are to:
+
+-   Revise previous models
+
+-   Understand the XGBoost algorithm
+
+-   Use the ML framework to:
+
+    -   Pre-process data
+    -   Train an XGBoost model
+    -   Tune hyperparameters
+    -   Evaluate model predictability
+
+-   Learn to interpret model performance and feature importance
+
+-   Learn **parallel processing** with `doParallel`
+
+-   Explore **grid** and **Latin hypercube** hyperparameter tuning
+
+-   Use `tune_race_anova()` for efficient **ANOVA-based racing**
+
+# Overview of Regularized Regression Models
+
+## Ridge Regression (L2 Penalty)
+
+-   **Goal:** Handle multicollinearity by shrinking coefficients.\
+-   **Mechanism:** Adds a penalty equal to the **sum of squared coefficients** (L2) to the loss function.\
+-   **Effect:** Keeps all variables but shrinks their influence.\
+-   **Use when:** You want to retain all features and reduce noise from collinearity.
+
+![Ridge Coefficients](https://bradleyboehmke.github.io/HOML/06-regularized-regression_files/figure-html/ridge-coef-example-1.png)
+
+## Lasso Regression (L1 Penalty)
+
+-   **Goal:** Reduce model complexity and perform variable selection.\
+-   **Mechanism:** Adds a penalty equal to the **sum of absolute coefficients** (L1).\
+-   **Effect:** Pushes some coefficients **exactly to zero** (automatic feature selection).\
+-   **Use when:** You expect only a few variables to be important.
+
+![Lasso Coefficients](https://bradleyboehmke.github.io/HOML/06-regularized-regression_files/figure-html/lasso-coef-example-1.png)
+
+## Elastic Net (L1 + L2 Penalty)
+
+-   **Goal:** Combine ridge’s stability with lasso’s variable selection.\
+-   **Mechanism:** Mixes L1 and L2 penalties to balance between shrinkage and selection.\
+-   **Effect:** Selects features while keeping model robust with correlated predictors.\
+-   **Use when:** Predictors are correlated and variable selection is needed.
+
+# Tree-Based Methods
+
+## Conditional Inference Tree (CIT)
+
+-   **Goal:** Build interpretable trees using statistical tests.\
+-   **Mechanism:** Iteratively selects variables with the **lowest p-value** and splits based on significance.\
+-   **Effect:** Produces a decision tree that models nonlinear effects and includes feature selection.\
+-   **Use when:** You want interpretability and built-in variable selection.
+
+## Random Forest (RF)
+
+-   **Goal:** Improve predictive performance by combining many trees.\
+-   **Mechanism:** Trains trees on **bootstrapped data** with **random subsets of variables** at each split.\
+-   **Effect:** Averages predictions from many trees to reduce variance and improve generalization.\
+-   **Use when:** You need high accuracy, handle multicollinearity, and don’t mind a less interpretable model.
+
+## How XGBoost Works
+
+1.  Initialize with a base prediction (e.g., mean in regression).
+2.  Compute residuals between prediction and actual values.
+3.  Train a tree to predict these residuals (gradients).
+4.  Update the model by adding the new tree’s predictions.
+5.  Repeat steps 2–4 for a set number of iterations or until convergence.
+
+![Boosted Trees](https://miro.medium.com/v2/resize:fit:720/format:webp/1*eosJ6Yg0epLuH5kHsMaPWQ.png)
+
+# What is Ensemble Learning?
+
+Ensemble learning combines multiple models (**weak learners**) to build a stronger overall model. It's based on the idea that a group of diverse models performs better than any individual model.
+
+![Ensemble Concept](https://www.ibm.com/content/dam/connectedassets-adobe-cms/worldwide-content/creative-assets/s-migr/ul/g/b5/87/ensemble-learning-stacking.png)
+
+## Types of Ensemble Learning
+
+-   **Bagging**:
+    -   Trains models independently using random subsets of data.
+    -   Combines their predictions via averaging or voting.
+    -   Example: Random Forest.
+-   **Boosting**:
+    -   Trains models sequentially.
+    -   Each new model improves on the previous by reducing errors.
+    -   Example: XGBoost, AdaBoost.
+
+![Stacked Models](https://towardsdatascience.com/wp-content/uploads/2022/05/1VkDaloNLOE0kDp_Y-D0hUg.png)
+
+![Boosting in Action](https://bradleyboehmke.github.io/HOML/10-gradient-boosting_files/figure-html/boosting-in-action-1.png)
+
+![Ensemble Boosting](https://www.ibm.com/content/dam/connectedassets-adobe-cms/worldwide-content/creative-assets/s-migr/ul/g/fc/4f/ensemble-learning-boosting.png)
+
+# Introduction to XGBoost
+
+XGBoost (**Extreme Gradient Boosting**) is a powerful and scalable machine learning algorithm based on **gradient boosting**. It is particularly effective for **tabular or structured data** and is widely used in competitive data science and real-world applications due to its accuracy and speed.
+
+Unlike Random Forest, which builds decision trees independently, XGBoost builds **trees sequentially**, where each new tree aims to **correct the prediction errors** made by the previous trees. It does this by **minimizing a specified loss function** using **gradient descent** techniques.
+
+XGBoost also supports:
+
+-   **Parallel tree construction**
+-   **Regularization** (to prevent overfitting)
+-   **Handling of missing values**
+-   **Custom loss functions**
+-   **Efficient memory usage and computation**
+
+Due to these capabilities, XGBoost has become one of the most popular and high-performing machine learning libraries for problems involving **regression, classification, and ranking**.
+
+## Key Differences Between Tree Models
+
+![Key Differences](https://miro.medium.com/v2/resize:fit:1000/format:webp/1*XUwLtkWEPnLRXJjr5ht9Lg.png)
+
+# Gradient Descent and Boosting
+
+Gradient descent is an optimization technique used to minimize a loss (or cost) function by iteratively updating model parameters in the direction of the steepest descent (i.e., the negative gradient). Think of it like a skier choosing the steepest path downhill to reach the bottom as quickly as possible.
+
+## Three Steps to Gradient Boosting
+
+1.  **Loss Function Optimized**\
+    A loss function is used to measure the error between the model’s predictions and the true values. Gradient descent is applied to minimize this loss by adjusting model parameters.
+
+2.  **Weak Learner (Decision Tree)**\
+    A weak learner, usually a shallow decision tree, is trained to predict the residual errors of the previous model. It performs just slightly better than random guessing.
+
+3.  **Trees Added Sequentially**\
+    New trees are added one after another, with each tree correcting the mistakes of the combined previous trees. This process continues until a target accuracy or number of trees is reached.
+
+In **gradient boosting**, this idea is applied by sequentially fitting new decision trees to the residuals (errors) made by previous trees—gradually improving predictions step by step.
+
+-   A **learning rate** determines how much each new tree corrects the errors.
+    -   **Too small**: Learning is slow but stable.
+    -   **Too large**: May overshoot or miss the minimum altogether.
+
+Boosting can work with many loss functions (e.g., MSE, MAE, log loss), as long as they are differentiable.
+
+![Effect of Learning Rate](https://bradleyboehmke.github.io/HOML/10-gradient-boosting_files/figure-html/learning-rate-fig-1.png)
+
+# 🔧 Key XGBoost Hyperparameters
+
+Tree level
+
+## 🔢 Number of Predictors Sampled (`mtry`)
+
+The `mtry` parameter defines how many predictors are randomly chosen at each split. This adds diversity among trees. Typical values range from 1 up to the total number of features. In XGBoost, this is sometimes referred to as `colsample_bytree`.
+
+## ✂️ Loss Reduction
+
+The `loss_reduction` parameter (also called `gamma`) defines the minimum gain required to make a split. If the reduction in loss from a split is less than this value, the split won't happen. This acts as a pruning mechanism to simplify trees and avoid overfitting. Common values range from 0 (no pruning) to 10+ in more conservative models.
+
+## 📦 Minimum Observations in Terminal Nodes
+
+The `min_n` parameter (also known as `min_child_weight`) sets the minimum number of observations required in a terminal node (leaf). It helps control the complexity of the tree. Higher values (e.g., 10 or more) prevent overfitting by stopping splits that rely on very few data points. Lower values (e.g., 1–5) allow for fine-grained patterns to be captured, which might be useful in cases of imbalanced datasets.
+
+![Terminal Node Size](https://miro.medium.com/v2/resize:fit:1400/1*pt7Ei6v6fwQsFUvJY_akcg.png)
+
+## 🌳 Tree Depth
+
+The `tree_depth` parameter defines how deep each individual tree can grow. Deeper trees can capture complex patterns and feature interactions, but they also increase the chance of overfitting. Shallower trees are faster and more general. Typical depths range from 3 to 8, although a depth of 1 (decision stumps) is used in some high-noise or large-scale settings.
+
+![Tree Depth Effect](https://www.baeldung.com/wp-content/uploads/sites/4/2020/05/Screenshot-2020-05-12-at-07.03.52-1024x695.png){alt="Tree Depth Effect"}\
+![Early Stopping Trees](https://bradleyboehmke.github.io/HOML/07-decision-trees_files/figure-html/dt-early-stopping-1.png){alt="Early Stopping Trees"}
+
+Forest Level
+
+## 🌲 Number of Trees
+
+The `trees` hyperparameter refers to the number of boosting rounds, or how many trees are added one after another. More trees generally mean better performance as errors are corrected at each stage. However, too many trees—especially combined with a high learning rate—can cause overfitting. A good practice is to use cross-validation to find the optimal number of trees. Typical values range from 100 to over 1000.
+
+![Tuning Trees](https://bradleyboehmke.github.io/HOML/09-random-forest_files/figure-html/tuning-trees-1.png)
+
+## ⚡ Learning Rate
+
+The `learn_rate` (also called `eta`) controls how much influence each tree has on the final model. It's essentially the step size used in gradient descent. Smaller values (like 0.01) make the model learn slowly and carefully, requiring more trees. Larger values (like 0.3) speed up learning but may increase the risk of overfitting. Common ranges are from 0.01 to 0.3. Lower values typically result in better generalization.
+
+![Gradient Descent Steps](https://bradleyboehmke.github.io/HOML/10-gradient-boosting_files/figure-html/gradient-descent-fig-1.png)
+
+\## 🧪 Sample Size
+
+The `sample_size` parameter determines the proportion of the training data used to fit each tree (row subsampling). A value of 1 means all rows are used; values like 0.5–0.8 are commonly used to add randomness and reduce overfitting.
+
+# 🌲 XGBoost vs. Random Forest
+
+Both algorithms are based on decision trees, but they differ in how the trees are built and combined.
+
+-   **XGBoost** uses a boosting approach where trees are built sequentially. Each new tree corrects errors made by previous ones. It includes regularization (L1 and L2), offers pruning, supports early stopping, and is optimized for speed through parallel processing. It often provides higher accuracy, especially on structured/tabular data.
+-   **Random Forest**, in contrast, builds trees in parallel using bootstrap samples and averages their predictions. It’s more robust, less prone to overfitting by default, and easier to tune, making it a good starting point for many tasks. However, it lacks the fine control and flexibility offered by boosting methods like XGBoost.
+
+# ✅ Pros of XGBoost
+
+-   High accuracy due to sequential boosting
+-   Built-in L1 and L2 regularization to prevent overfitting
+-   Very fast and scalable thanks to parallel computing
+-   Handles missing values internally without imputation
+-   Provides feature importance scores
+-   Supports both regression and classification tasks
+-   Allows custom loss/objective functions
+-   Offers pruning and early stopping to improve generalization
+
+# ⚠️ Cons of XGBoost
+
+-   More complex to tune compared to simpler models
+-   Higher risk of overfitting if not carefully tuned
+-   Less interpretable than a single decision tree or linear model
+-   Takes longer to train with large datasets
+-   Requires special handling for time-series tasks
+-   Only designed for supervised learning problems
+
+# Quiz - go eLC
+
+# ML Workflow with XGBoost
+
+## Step 1: Load Libraries
+
+We begin by loading the required libraries:
+
+```{r}
+#| message: false
+#| warning: false
+#install.packages("xgboost") #new pacakage
+library(tidymodels)   # Core framework for modeling (includes recipes, workflows, parsnip, etc.)
+library(finetune)     # Additional tuning strategies (e.g., racing, ANOVA-based tuning)
+library(vip)          # For plotting variable importance from fitted models
+library(xgboost)      # XGBoost implementation in R
+library(ranger)       # Fast implementation of Random Forests
+library(tidyverse)    # Data wrangling and visualization
+library(doParallel)   # For parallel computing (useful during resampling/tuning)
+#library(caret)       # Other great library for Machine Learning 
+```
+
+# Load the data set
+
+-   Setting a seed ensures reproducibility.
+-   Splitting data helps validate generalizability by preventing the model from seeing the test data during training.
+
+```{r weather}
+weather <- read_csv("../data/weather_monthsum.csv")
+weather
+```
+
+-   We begin by splitting the dataset into **training** and **testing** sets.
+-   We use **stratified sampling** to ensure that the distribution of the target variable is maintained in both sets.
+-   A random **seed** is set to ensure reproducibility of the split.
+-   This step ensures that the model is validated on unseen data, helping assess its **generalizability**.
+
+> ⚠️ Note: Since tree-based models (like XGBoost and Random Forest) are not affected by the scale of the features, **normalization or standardization is not necessary**
+
+# ML workflow
+
+## 1. Pre-processing
+
+```{r weather_split}
+set.seed(931735) # Setting seed to get reproducible results 
+weather_split <- initial_split(
+  weather, 
+  prop = .7, # proption of split same as previous codes
+  strata = strength_gtex  # Stratify by target variable
+  )
+weather_split
+```
+
+### a. Data split
+
+For data split, let's use **70% training / 30% testing**.
+
+```{r weather_train}
+weather_train <- training(weather_split)  # 70% of data
+weather_train #This is your traing data frame
+```
+
+```{r weather_test}
+weather_test <- testing(weather_split)    # 30% of data
+weather_test
+```
+
+### b. Distribution of target variable
+
+```{r distribution}
+ggplot() +
+  geom_density(data = weather_train, 
+               aes(x = strength_gtex),
+               color = "red") +
+  geom_density(data = weather_test, 
+               aes(x = strength_gtex),
+               color = "blue") 
+  
+```
+
+### c. Data processing with recipe
+
+Before training, we need to perform some processing steps, like
+
+-   normalizing
+-   **removing unimportant variables**
+-   dropping NAs
+-   performing PCA on the go
+-   removing columns with single value
+-   others?
+
+For that, we'll create a **recipe** of these processing steps.
+
+This recipe will then be applied now to the **train data**, and easily applied to the **test data** when we bring it back at the end.
+
+Creating a recipe is an easy way to port your processing steps for other data sets without needing to repeat code, and also only considering the data it is being applied to.
+
+You can find all available recipe step options here: https://tidymodels.github.io/recipes/reference/index.html
+
+Different model types require different processing steps.\
+Let's check what steps are required for an elastic net model (linear_reg). We can search for that in this link: https://www.tmwr.org/pre-proc-table #Don't need for numeric data
+
+> Differently from elastic net, variables do not need to be normalized in XgBoost, so we'll skip this step.
+
+```{r weather_recipe}
+# Create recipe for data preprocessing
+weather_recipe <- recipe(strength_gtex ~ ., data = weather_train) %>% # Remove identifier columns and months not in growing season
+  step_rm(
+    year,       # Remove year identifier
+    site,       # Remove site identifier
+    matches("Jan|Feb|Mar|Apr|Nov|Dec")  # Remove non-growing season months
+  )
+weather_recipe
+```
+
+```{r weather_prep}
+# Prep the recipe to estimate any required statistics
+weather_prep <- weather_recipe %>% 
+  prep()
+
+# Examine preprocessing steps
+weather_prep
+```
+
+## 2. Training
+
+### a. Model specification
+
+First, let's specify:\
+- the **type of model** we want to train\
+- which **engine** we want to use\
+- which **mode** we want to use
+
+> XgBoost can be run with either numerical (regression) or categorical (classification) explanatory variable. Therefore, we have the need to specify the mode here.
+
+XgBoost **hyperparameters**:
+
+-   **`trees`**: The number of boosting rounds (i.e., how many trees will be added sequentially).\
+-   **`tree_depth`**: Controls how deep each individual tree can grow. Deeper trees can capture more complex interactions but also increase the risk of overfitting.\
+-   **`min_n`**: Minimum number of observations required in a node for it to be split. Acts as a regularization tool to prevent overly specific splits.\
+-   **`learn_rate`**: Also known as `eta`, it controls how much each additional tree contributes to the overall model. Smaller values make the model more stable but require more trees.
+
+```{r xgb_spec}
+xgb_spec <- #Specifying XgBoost as our model type, asking to tune the hyperparameters
+   # Total number of boosting iterations
+         # Maximum depth of each tree
+             # Minimum samples required to split a node
+        # Step size shrinkage for each boosting step
+
+        #specify engine 
+  
+       # Set to mode
+xgb_spec
+
+```
+
+### b. Cross-validation setup
+
+We use 10-fold cross-validation to evaluate model performance during tuning:
+
+```{r}
+set.seed(235) #34549
+resampling_foldcv <- vfold_cv(weather_train, # Create 5-fold cross-validation resampling object from training data
+                              v = 10)
+
+resampling_foldcv
+resampling_foldcv$splits[[1]]
+```
+
+### c. Hyperparameter grid with Latin Hypercube Sampling
+
+We use Latin hypercube sampling to generate a diverse grid of hyperparameter combinations:
+
+```{r }
+xgb_grid <- 
+
+xgb_grid
+```
+
+```{r}
+ggplot(data = xgb_grid,
+       aes(x = tree_depth, 
+           y = min_n)) +
+  geom_point(aes(color = factor(learn_rate),
+                 size = trees),
+             alpha = .5,
+             show.legend = FALSE)
+```
+
+## 3. Model Tuning  
+To explore this extensive grid, we are going to use a method called **ANOVA Racing**.  
+
+It works by:  
+
+1. Evaluating all of the candidate models, but only for a few resamples.  
+
+2. Determining which candidates have a low probability of being selected.  
+
+3. Eliminate poor candidates.  
+
+4. Repeat with next resample (until no more resamples remain).  
+
+This can result in fitting a small number of models.
+It is not an iterative search; it is an adaptive grid search.
+
+```{r xgb_grid_result}
+set.seed(76544)
+
+xgb_res <- ##(object = xgb_spec,
+                      preprocessor = weather_recipe,
+                      resamples = resampling_foldcv,
+                      grid = xgb_grid,
+                      control = control_race(save_pred = TRUE))
+
+
+
+beepr::beep()
+xgb_res$.metrics[[2]]
+```
+
+Let's check the race results
+```{r}
+```
+
+Notice how some combinations were dropped off early due to poor fit metrics on some initial resamples.  
+
+## 4. Select Best Models
+
+We select the best models using three strategies (best, within 1 SE, within 2% loss) which we learned in class:
+
+```{r}
+# Based on lowest RMSE
+best_rmse <- xgb_res %>% 
+  select_best(metric = "rmse")%>% 
+  mutate(source = "best_rmse")
+
+best_rmse
+
+```
+
+```{r}
+# Based on lowers RMSE within 1% loss
+best_rmse_pct_loss <- xgb_res %>% 
+  select_by_pct_loss("min_n",
+                     metric = "rmse",
+                     limit = 1
+                     )%>% 
+  mutate(source = "best_rmse_pct_loss")
+
+best_rmse_pct_loss
+```
+
+```{r}
+# Based on lowest RMSE within 1 se
+best_rmse_one_std_err <- xgb_res %>% 
+  select_by_one_std_err(metric = "rmse",
+                        eval_time = 100,
+                        trees
+                        )%>% 
+  mutate(source = "best_rmse_one_std_err")
+
+best_rmse_one_std_err
+```
+
+Here we use all three methods which we learn in this class for R2.
+
+```{r}
+# Based on greatest R2
+best_r2 <- xgb_res %>% 
+  select_best(metric = "rsq")%>% 
+  mutate(source = "best_r2")
+
+best_r2
+```
+
+```{r}
+# Based on lowers R2 within 1% loss
+best_r2_pct_loss <- xgb_res %>% 
+  select_by_pct_loss("min_n",
+                     metric = "rsq",
+                     limit = 1
+                     ) %>% 
+  mutate(source = "best_r2_pct_loss")
+
+best_r2_pct_loss
+```
+
+```{r}
+# Based on lowest R2 within 1 se
+best_r2_one_std_error <- xgb_res %>% 
+  select_by_one_std_err(metric = "rsq",
+                        eval_time = 100,
+                        trees
+                        ) %>%
+  mutate(source = "best_r2_one_std_error")
+
+best_r2_one_std_error
+```
+
+## Compare and Finalize Model
+
+```{r comparing values}
+best_rmse %>% 
+  bind_rows(best_rmse_pct_loss, 
+            best_rmse_one_std_err, 
+            best_r2, 
+            best_r2_pct_loss, 
+            best_r2_one_std_error)
+```
+
+## 5. Final Specification
+
+```{r final_spec_fit}
+final_spec <- boost_tree(
+  trees = best_r2$trees,           # Number of boosting rounds (trees)
+  tree_depth = best_r2$tree_depth, # Maximum depth of each tree
+  min_n = best_r2$min_n,           # Minimum number of samples to split a node
+  learn_rate = best_r2$learn_rate  # Learning rate (step size shrinkage)
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+final_spec
+```
+
+## 6. Final Fit and Predictions
+
+## Validation
+
+```{r final_fit}
+set.seed(10)
+final_fit <- last_fit(final_spec,
+                weather_recipe,
+                split = weather_split)
+
+final_fit %>%
+  collect_predictions()
+```
+
+## 7. Evaluate on Test Set
+
+```{r final_fit_metrics}
+final_fit %>%
+  collect_metrics()
+```
+
+-R2 & RMSE = 0.2049.
+
+-best_r2_pct_loss = 0.2049.
+
+-best_r2_one_std_error = 0.1936.
+
+-best_rmse_pct_loss = 0.1855.
+
+-best_rmse_one_std_err = 0.1254.
+
+## 8. Evaluate on Training Set
+
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rmse(strength_gtex, .pred) %>%
+  bind_rows(
+    
+    
+# R2
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rsq(strength_gtex, .pred))
+```
+
+## 9. Predicted vs Observed Plot
+
+```{r}
+final_fit %>%
+  collect_predictions() %>%
+  ggplot(aes(x = strength_gtex,
+             y = .pred)) +
+  geom_point() +
+  geom_abline() +
+  geom_smooth(method = "lm") +
+  scale_x_continuous(limits = c(20, 40)) +
+  scale_y_continuous(limits = c(20, 40)) 
+```
+
+## 10. Variable Importance
+
+```{r final_spec}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather_train)) %>% #There little change in variable improtance if you use full dataset
+    vi() %>%
+  mutate(
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+```
+
+## Summary
+
+In this exercise, we covered: -XGBoost algorithm.
+
+-   Model training with ML workflows
+
+-   Hyperparameter tuning with iterative search
+
+-   10-fold cross-validation as the resampling method
+
+-   Evaluation using **RMSE** and **R²** metrics
+
+-   Model validation with test set performance
+
+-   Predicted vs. observed plots and variable importance
+
+-   Learn **parallel processing** with `doParallel`
+
+-   Explore **grid** and **Latin hypercube** hyperparameter tuning
+
+-   Use `tune_race_anova()` for efficient **ANOVA-based racing**
+
+# Further Resources
+
+-   [**Tidy Modeling with R (TMWR)**](https://www.tmwr.org)\
+    A comprehensive book by Max Kuhn and Julia Silge, focused on using the `tidymodels` ecosystem for building, tuning, and evaluating models in R. A must-read for anyone using R for machine learning.
+-   [**Tidy Modeling Book Club**](https://r4ds.github.io/bookclub-tmwr/)\
+    This community-driven book club breaks down the *Tidy Modeling with R* book into digestible sections, complete with meeting notes and examples—great for collaborative learning.
+-   [**Hands-On Machine Learning with R**](https://bradleyboehmke.github.io/HOML/)\
+    A practical, hands-on guide to building machine learning models in R. It covers a wide range of algorithms, including XGBoost, and provides intuitive explanations along with visualizations.
+-   [**Machine Learning for the Social Sciences**](https://cimentadaj.github.io/ml_socsci/)\
+    Tailored for social science researchers, this resource teaches machine learning using R and explains the principles with a focus on interpretability and applied examples.
+-   [**XGBoost Official Documentation**](https://xgboost.readthedocs.io/en/stable/)\
+    The official documentation for XGBoost. It provides details on installation, usage, APIs, and model parameters—essential for understanding how the algorithm works under the hood.
+-   [**XGBoost Parameter Reference**](https://xgboost.readthedocs.io/en/stable/parameter.html)\
+    A detailed explanation of all XGBoost parameters (like `eta`, `max_depth`, `gamma`, etc.), including how they affect model behavior and performance. Great for hyperparameter tuning.
+-   [**Hyperparameter Tuning with TMWR**](https://www.tmwr.org/tuning.html)\
+    A specific chapter from the TMWR book focused entirely on tuning hyperparameters using `tune`, `grid_search`, and advanced methods like racing.
+-   [**Analytics Vidhya – How XGBoost Works**](https://www.analyticsvidhya.com/blog/2021/08/understanding-how-xgboost-works/)\
+    An intuitive, beginner-friendly blog post explaining the inner workings of XGBoost with examples and visuals. Great for conceptual clarity before diving into code.
+-   [**Towards Data Science – XGBoost vs RF vs GBM**](https://towardsdatascience.com/xgboost-vs-random-forest-vs-gradient-boosting-74b5fd50e20a)\
+    A comparative article that outlines the differences between XGBoost, Random Forest, and Gradient Boosting—helpful for choosing the right model based on your data and objectives.
+
+# Quiz - go eLC
