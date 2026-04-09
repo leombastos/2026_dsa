@@ -1,0 +1,617 @@
+---
+title: "SHAP"
+format: html
+editor: visual
+---
+
+# Learning Objectives
+
+Our learning objectives are to:
+
+-   Understand the XGBoost algorithm using explanable AI SHAP
+
+-   Interpret and explain the various plots from SHAP to do a local and global interpretation
+
+
+# ML Workflow with XGBoost
+
+## Step 1: Load Libraries
+
+We begin by loading the required libraries:
+
+```{r}
+#| message: false
+#| warning: false
+#install.packages("xgboost") #new pacakage
+
+library(tidymodels)   # Core framework for modeling (includes recipes, workflows, parsnip, etc.)
+library(finetune)     # Additional tuning strategies (e.g., racing, ANOVA-based tuning)
+library(vip)          # For plotting variable importance from fitted models
+library(xgboost)      # XGBoost implementation in R
+library(ranger)       # Fast implementation of Random Forests
+library(tidyverse)    # Data wrangling and visualization
+library(doParallel)   # For parallel computing (useful during resampling/tuning)
+library(shapviz)
+#library(caret)       # Other great library for Machine Learning 
+```
+
+# Load the data set
+
+-   Setting a seed ensures reproducibility.
+-   Splitting data helps validate generalizability by preventing the model from seeing the test data during training.
+
+```{r weather}
+weather <- read_csv("../data/weather_monthsum.csv")
+weather
+```
+
+-   We begin by splitting the dataset into **training** and **testing** sets.
+-   We use **stratified sampling** to ensure that the distribution of the target variable is maintained in both sets.
+-   A random **seed** is set to ensure reproducibility of the split.
+-   This step ensures that the model is validated on unseen data, helping assess its **generalizability**.
+
+> ⚠️ Note: Since tree-based models (like XGBoost and Random Forest) are not affected by the scale of the features, **normalization or standardization is not necessary**
+
+# ML workflow
+
+## 1. Pre-processing
+
+```{r weather_split}
+set.seed(931735) # Setting seed to get reproducible results 
+
+weather_split <- initial_split(
+  weather, 
+  prop = .7, # proption of split same as previous codes
+  strata = strength_gtex  # Stratify by target variable
+  )
+weather_split
+```
+
+### a. Data split
+
+For data split, let's use **70% training / 30% testing**.
+
+```{r weather_train}
+weather_train <- training(weather_split)  # 70% of data
+weather_train #This is your traing data frame
+```
+
+```{r weather_test}
+weather_test <- testing(weather_split)    # 30% of data
+weather_test
+```
+
+### b. Distribution of target variable
+
+```{r distribution}
+ggplot() +
+  geom_density(data = weather_train, 
+               aes(x = strength_gtex),
+               color = "red") +
+  geom_density(data = weather_test, 
+               aes(x = strength_gtex),
+               color = "blue") 
+  
+```
+
+### c. Data processing with recipe
+
+Before training, we need to perform some processing steps, like
+
+-   normalizing
+-   **removing unimportant variables**
+-   dropping NAs
+-   performing PCA on the go
+-   removing columns with single value
+-   others?
+
+For that, we'll create a **recipe** of these processing steps.
+
+This recipe will then be applied now to the **train data**, and easily applied to the **test data** when we bring it back at the end.
+
+Creating a recipe is an easy way to port your processing steps for other data sets without needing to repeat code, and also only considering the data it is being applied to.
+
+You can find all available recipe step options here: https://tidymodels.github.io/recipes/reference/index.html
+
+Different model types require different processing steps.\
+Let's check what steps are required for an elastic net model (linear_reg). We can search for that in this link: https://www.tmwr.org/pre-proc-table #Don't need for numeric data
+
+> Differently from elastic net, variables do not need to be normalized in XgBoost, so we'll skip this step.
+
+```{r weather_recipe}
+# Create recipe for data preprocessing
+weather_recipe <- recipe(strength_gtex ~ ., data = weather_train) %>% # Remove identifier columns and months not in growing season
+  step_rm(
+    year,
+    site,
+    matches("Jan|Feb|Mar|Apr|Nov|Dec")  # Remove non-growing season months
+  )
+
+weather_recipe
+```
+
+```{r weather_prep}
+# Prep the recipe to estimate any required statistics
+weather_prep <- weather_recipe %>% 
+  prep()
+
+# Examine preprocessing steps
+weather_prep
+```
+
+## 2. Training
+
+### a. Model specification
+
+First, let's specify:\
+- the **type of model** we want to train\
+- which **engine** we want to use\
+- which **mode** we want to use
+
+> XgBoost can be run with either numerical (regression) or categorical (classification) explanatory variable. Therefore, we have the need to specify the mode here.
+
+XgBoost **hyperparameters**:
+
+-   **`trees`**: The number of boosting rounds (i.e., how many trees will be added sequentially).\
+-   **`tree_depth`**: Controls how deep each individual tree can grow. Deeper trees can capture more complex interactions but also increase the risk of overfitting.\
+-   **`min_n`**: Minimum number of observations required in a node for it to be split. Acts as a regularization tool to prevent overly specific splits.\
+-   **`learn_rate`**: Also known as `eta`, it controls how much each additional tree contributes to the overall model. Smaller values make the model more stable but require more trees.
+
+```{r xgb_spec}
+xgb_spec <- #Specifying XgBoost as our model type, asking to tune the hyperparameters
+  boost_tree(
+   # Total number of boosting iterations
+    trees = tune(),
+         # Maximum depth of each tree
+    tree_depth = tune(),
+             # Minimum samples required to split a node
+    min_n = tune(),
+        # Step size shrinkage for each boosting step
+    learn_rate = tune()
+      ) %>%
+        #specify engine 
+  set_engine("xgboost") %>%
+       # Set to mode
+  set_mode("regression")
+  
+xgb_spec
+
+```
+
+### b. Cross-validation setup
+
+We use 10-fold cross-validation to evaluate model performance during tuning:
+
+```{r}
+set.seed(235) #34549
+
+resampling_foldcv <- vfold_cv(weather_train, # Create 5-fold cross-validation resampling object from training data
+                              v = 10)
+
+resampling_foldcv
+resampling_foldcv$splits[[1]]
+```
+
+### c. Hyperparameter grid with Latin Hypercube Sampling
+
+We use Latin hypercube sampling to generate a diverse grid of hyperparameter combinations:
+
+```{r }
+xgb_grid <- grid_latin_hypercube(
+  tree_depth(),
+  min_n(),
+  learn_rate(),
+  trees(),
+  size = 10
+)
+
+xgb_grid
+```
+
+```{r}
+ggplot(data = xgb_grid,
+       aes(x = tree_depth, 
+           y = min_n)) +
+  geom_point(aes(color = factor(learn_rate),
+                 size = trees),
+             alpha = .5,
+             show.legend = FALSE)
+```
+
+## 3. Model Tuning
+
+To explore this extensive grid, we are going to use a method called **ANOVA Racing**.
+
+It works by:
+
+1.  Evaluating all of the candidate models, but only for a few resamples.
+
+2.  Determining which candidates have a low probability of being selected.
+
+3.  Eliminate poor candidates.
+
+4.  Repeat with next resample (until no more resamples remain).
+
+This can result in fitting a small number of models. It is not an iterative search; it is an adaptive grid search.
+
+```{r xgb_grid_result}
+set.seed(76544)
+registerDoParallel(cores = parallel::detectCores() - 1)
+
+xgb_res <- tune_race_anova(object = xgb_spec,
+                      preprocessor = weather_recipe,
+                      resamples = resampling_foldcv,
+                      grid = xgb_grid,
+                      control = control_race(save_pred = TRUE))
+stopImplicitCluster()
+
+
+
+beepr::beep()
+xgb_res$.metrics[[2]]
+```
+
+Let's check the race results
+
+```{r}
+plot_race(xgb_res)
+```
+
+Notice how some combinations were dropped off early due to poor fit metrics on some initial resamples.
+
+## 4. Select Best Models
+
+We select the best models using three strategies (best, within 1 SE, within 2% loss) which we learned in class:
+
+```{r}
+# Based on lowest RMSE
+best_rmse <- xgb_res %>% 
+  select_best(metric = "rmse")%>% 
+  mutate(source = "best_rmse")
+
+best_rmse
+
+```
+
+```{r}
+# Based on lowers RMSE within 1% loss
+best_rmse_pct_loss <- xgb_res %>% 
+  select_by_pct_loss("min_n",
+                     metric = "rmse",
+                     limit = 1
+                     )%>% 
+  mutate(source = "best_rmse_pct_loss")
+
+best_rmse_pct_loss
+```
+
+```{r}
+# Based on lowest RMSE within 1 se
+best_rmse_one_std_err <- xgb_res %>% 
+  select_by_one_std_err(metric = "rmse",
+                        eval_time = 100,
+                        trees
+                        )%>% 
+  mutate(source = "best_rmse_one_std_err")
+
+best_rmse_one_std_err
+```
+
+Here we use all three methods which we learn in this class for R2.
+
+```{r}
+# Based on greatest R2
+best_r2 <- xgb_res %>% 
+  select_best(metric = "rsq")%>% 
+  mutate(source = "best_r2")
+
+best_r2
+```
+
+```{r}
+# Based on lowers R2 within 1% loss
+best_r2_pct_loss <- xgb_res %>% 
+  select_by_pct_loss("min_n",
+                     metric = "rsq",
+                     limit = 1
+                     ) %>% 
+  mutate(source = "best_r2_pct_loss")
+
+best_r2_pct_loss
+```
+
+```{r}
+# Based on lowest R2 within 1 se
+best_r2_one_std_error <- xgb_res %>% 
+  select_by_one_std_err(metric = "rsq",
+                        eval_time = 100,
+                        trees
+                        ) %>%
+  mutate(source = "best_r2_one_std_error")
+
+best_r2_one_std_error
+```
+
+## Compare and Finalize Model
+
+```{r comparing values}
+best_rmse %>% 
+  bind_rows(best_rmse_pct_loss, 
+            best_rmse_one_std_err, 
+            best_r2, 
+            best_r2_pct_loss, 
+            best_r2_one_std_error) %>%
+  dplyr::select(source, everything())
+```
+
+## 5. Final Specification
+
+```{r final_spec_fit}
+final_spec <- boost_tree(
+  trees = best_r2$trees,           # Number of boosting rounds (trees)
+  tree_depth = best_r2$tree_depth, # Maximum depth of each tree
+  min_n = best_r2$min_n,           # Minimum number of samples to split a node
+  learn_rate = best_r2$learn_rate  # Learning rate (step size shrinkage)
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+final_spec
+```
+
+## 6. Final Fit and Predictions
+
+## Validation
+
+```{r final_fit}
+set.seed(10)
+final_fit <- last_fit(final_spec,
+                weather_recipe,
+                split = weather_split)
+
+final_fit %>%
+  collect_predictions()
+```
+
+## 7. Evaluate on Test Set
+
+```{r final_fit_metrics}
+final_fit %>%
+  collect_metrics()
+```
+
+-R2 & RMSE = 0.2049.
+
+-best_r2_pct_loss = 0.2049.
+
+-best_r2_one_std_error = 0.1936.
+
+-best_rmse_pct_loss = 0.1855.
+
+-best_rmse_one_std_err = 0.1254.
+
+## 8. Evaluate on Training Set
+
+```{r}
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rmse(strength_gtex, .pred) %>%
+  bind_rows(
+    
+    
+# R2
+final_spec %>%
+  fit(strength_gtex ~ .,
+      data = bake(weather_prep, 
+                  weather_train)) %>%
+  augment(new_data = bake(weather_prep, 
+                          weather_train)) %>% 
+  rsq(strength_gtex, .pred))
+```
+
+## 9. Predicted vs Observed Plot
+
+```{r}
+final_fit %>%
+  collect_predictions() %>%
+  ggplot(aes(x = strength_gtex,
+             y = .pred)) +
+  geom_point() +
+  geom_abline() +
+  geom_smooth(method = "lm") +
+  scale_x_continuous(limits = c(20, 40)) +
+  scale_y_continuous(limits = c(20, 40)) 
+```
+
+## 10. Variable Importance
+
+```{r final_spec}
+final_spec %>%
+  fit(strength_gtex ~ .,
+         data = bake(weather_prep, weather_train)) %>% #There little change in variable improtance if you use full dataset
+    vi() %>%
+  mutate(
+    Variable = fct_reorder(Variable, 
+                           Importance)
+  ) %>%
+  ggplot(aes(x = Importance, 
+             y = Variable)) +
+  geom_col() +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(y = NULL)
+```
+
+
+```{r}
+# To visualize the SHAP we need 2 things, model fit and the data (test or train) in a matrix format
+
+# SHAP ANALYSIS with your final_fit (last_fit)
+
+## 1. Prepare the pre-processed test data (exactly as the model saw it)
+test_baked <- 
+
+## 2. Create the matrix for SHAP computation (predictors only)
+X_pred <- test_baked %>% 
+
+
+## 3. Extract the raw xgboost model from your last_fit object
+xgb_fitted <- 
+
+## 4. Compute SHAP values (TreeSHAP – very fast)
+shap_obj <- shapviz(
+
+)
+
+print(shap_obj)   # Quick check that it worked
+```
+
+### Interpretation of the SHAP Summary (Beeswarm) Plot
+
+The **SHAP summary plot** (also called beeswarm plot) provides a compact, information-rich overview of how each feature influences the model's predictions for `strength_gtex` across the entire **test set**. It combines **feature importance** with the **direction and magnitude** of each feature's effect.
+
+#### How to Read This Plot
+
+- **Y-axis (vertical)**: Features are ranked from most to least important (based on the mean absolute SHAP value). The top feature has the largest overall impact on predicted `strength_gtex`.
+- **X-axis (horizontal)**: SHAP value. 
+  - Positive values (right of 0) → the feature **increases** the predicted `strength_gtex`.
+  - Negative values (left of 0) → the feature **decreases** the predicted `strength_gtex`.
+- **Each dot** represents one observation (test sample). Dots that pile up vertically show higher density (more common values).
+- **Color** represents the original feature value:
+  - **Yellow/Orange** = high value of that variable
+  - **Purple** = low value of that variable
+
+#### Key Insights from Your Plot
+
+1. **Most Important Features**  
+   The top three variables have the strongest influence:
+   - `mean_dayl_s_Sep` (mean day length in September) — mean |SHAP| = 0.352
+   - `mean_tmin_c_Sep` (mean minimum temperature in September) — 0.301
+   - `mean_srad_wm2_Aug` (mean solar radiation in August) — 0.284
+
+   These late-summer / early-fall weather conditions are the strongest drivers of predicted grass strength in your model.
+
+2. **Direction of Effects** (Relationship Patterns)
+   - For **September day length** (`mean_dayl_s_Sep`): High values (yellow) mostly push SHAP values positive → longer day length in September **increases** predicted `strength_gtex`.
+   - For **September minimum temperature** (`mean_tmin_c_Sep`): High values (yellow) tend to appear on the positive side → warmer minimum temperatures in September are associated with **higher** strength.
+   - For **August solar radiation** (`mean_srad_wm2_Aug`): High values (yellow) are mostly on the positive side, while low values (purple) are more on the negative side → higher solar radiation in August strongly **increases** the prediction.
+   - Similar patterns appear for other temperature and radiation variables in May–October (growing season months).
+
+3. **Overall Pattern**  
+   Most of the top features show a clear trend: **higher values** (yellow) tend to produce **positive SHAP values** (increase the prediction), while **lower values** (purple) produce **negative SHAP values** (decrease the prediction). This suggests that warmer temperatures, longer days, and higher solar radiation during the growing season are beneficial for `strength_gtex`.
+
+#### What This Means in Context
+
+Your XGBoost model has learned that late-summer and early-fall weather conditions (especially in September) are critical for grass strength. Variables related to temperature and solar radiation dominate over precipitation in this dataset. The spread of dots shows variability — the effect is not perfectly linear, and some observations show stronger or weaker influences depending on the exact conditions.
+
+This global view complements the variable importance plot you generated earlier with `vip()` and helps validate that the model is capturing biologically meaningful relationships.
+
+
+
+
+```{r}
+## === GLOBAL SHAP PLOTS ===
+
+# 1. SHAP Summary Beeswarm Plot (most informative – shows importance + effect direction)
+sv_importance(shap_obj,) +
+  
+
+# 2. SHAP Bar Importance Plot
+sv_importance(shap_obj,) +
+  ggtitle("SHAP Global Feature Importance (Mean |SHAP Value|)") +
+  theme_minimal(base_size = 12)
+```
+### SHAP Dependence Plot: Interaction Between May Temperature and September Day Length
+
+This **SHAP dependence plot** shows how the value of one feature (`mean_dayl_s_Sep` – mean day length in September) affects the model’s prediction of `strength_gtex`, while also revealing **interactions** with another feature (here colored by `mean_dayl.s_Aug` – mean day length in August).
+
+#### How to Read a SHAP Dependence Plot
+
+- **X-axis**: The actual value of the feature being examined (`mean_dayl_s_Sep` in this case).
+- **Y-axis**: The SHAP value for that feature — i.e., how much this feature contributes to pushing the prediction **higher** (positive) or **lower** (negative).
+- **Each point** represents one observation from the test set.
+- **Color** indicates the value of a second interacting feature (in this plot: August day length). Yellow = high values, purple = low values.
+
+#### Key Insights from This Plot
+
+- There is a **strong positive relationship** between September day length and its SHAP contribution. 
+  - When September day length is shorter (around 43,600–43,720 seconds), the SHAP values are mostly **negative** (ranging from -1.0 to -0.3). This means short September days **decrease** the predicted grass strength.
+  - As September day length increases (moving right on the x-axis), the SHAP values rise sharply and become **positive** (up to +0.6). Longer days in September strongly **increase** the predicted `strength_gtex`.
+
+- The plot also reveals an **interaction effect** with August day length:
+  - Points with **higher August day length** (yellow/orange) tend to sit higher on the plot, especially at longer September day lengths.
+  - This suggests that the beneficial effect of long September days is **amplified** when August also had longer days. In other words, consecutive months with longer daylight hours have a synergistic positive impact on grass strength.
+
+- The relationship is roughly **non-linear** — the positive effect becomes stronger once September day length exceeds approximately 43,750 seconds.
+
+#### Biological Interpretation
+
+This dependence plot supports the idea that **day length during late summer and early fall** is critical for grass strength. Longer photoperiods in September likely allow more time for photosynthesis and carbohydrate accumulation before winter, leading to stronger turf. The interaction with August day length indicates that consistent long days across the peak growing season further enhance this effect.
+
+This visualization goes beyond simple variable importance by showing **how** and **under what conditions** a feature influences the prediction.
+
+
+```{r}
+## === DEPENDENCE PLOTS (how individual features affect predictions) ===
+
+# Check your available variable names first
+colnames(X)
+
+# Example dependence plot – replace "May_temp" with one of your actual column names
+sv_dependence(shap_obj, ) +   # change variable name
+  ggtitle("SHAP Dependence Plot: Sep_temp") +
+  theme_minimal()
+```
+
+### SHAP Waterfall Plot for Test Observation #1
+
+The **SHAP Waterfall Plot** explains **exactly why** the XGBoost model made a specific prediction for this particular observation (Test row #1). It shows how each feature pushes the prediction up or down from the average (baseline) prediction.
+
+#### How to Read This Waterfall Plot
+
+- **Bottom bar (E[f(x)] = 30.4)**: This is the **baseline prediction** — the average predicted `strength_gtex` across the entire dataset (what the model would predict if it knew nothing about this specific observation).
+- **Top bar (f(x) = 27.2)**: This is the **final prediction** for this specific test observation.
+- **Each bar in between** represents one feature’s contribution (its SHAP value):
+  - **Red bars** (pointing left) → The feature **decreases** the prediction.
+  - **Yellow bars** (pointing right) → The feature **increases** the prediction.
+  - The length of the bar shows the **magnitude** of the effect.
+- The plot starts at the baseline (30.4) and **adds/subtracts** each feature’s contribution step by step until it reaches the final prediction (27.2).
+
+#### Key Insights from This Observation
+
+For this particular test sample:
+- The strongest negative driver is **`mean_dayl_s_Sep = 43693`** (very short September day length), which **decreased** the predicted strength by **0.912** units — the largest single push downward.
+- Other negative contributors include low solar radiation in July (`mean_srad_wm2_Jul = 405`), lower September maximum temperature, and low August solar radiation.
+- Only one feature had a noticeable positive effect: **`mean_tmin_c_Oct = 9`** (yellow bar +0.211), which slightly increased the prediction.
+- The remaining **27 other features** had very small individual effects, so they are grouped together at the bottom.
+
+Overall, the model predicted **27.2** for this observation (lower than the average of 30.4), mainly because of **suboptimal late-summer and early-fall conditions** — especially the short day length in September.
+
+This local explanation helps us understand the model’s decision for one specific case, which is very useful when you want to interpret individual predictions (e.g., why a particular month/year had low grass strength).
+
+
+```{r}
+## === INDIVIDUAL PREDICTION EXPLANATIONS ===
+
+# Waterfall plot for the same observation (very clear breakdown)
+sv_waterfall(shap_obj, ) +
+  ggtitle("SHAP Waterfall Plot - Test Observation #1")
+```
+
+## Summary
+
+In this exercise, we covered: -XGBoost algorithm.
+
+-   Interpret the post-hoc models like XGBoost using Explainable AI like SHAP
+
+-   Visualize and Interpret the results from the SHAP,
+
+# Further Resources
+
+-  A Unified Approach to Interpreting Model Predictions {Scott M Lundberg, Su-In Lee Advances in Neural Information Processing Systems 30 (NIPS 2017)}
+
+
+
